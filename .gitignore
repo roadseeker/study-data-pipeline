@@ -1,0 +1,65 @@
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+ENV/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Java / Maven / Gradle ---
+target/
+*.class
+*.jar
+*.war
+*.ear
+.gradle/
+build/
+
+# --- Spark / Flink / Airflow (common runtime artifacts) ---
+logs/
+*.log
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Airflow
+airflow.db
+airflow-webserver.pid
+webserver_config.py
+
+# --- Local data outputs (keep sample inputs) ---
+/data/*
+!/data/sample/
+!/data/sample/**
+
+# --- Local temp ---
+tmp/
+temp/
