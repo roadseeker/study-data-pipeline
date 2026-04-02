@@ -1,5 +1,3 @@
-version: "3.9"
-
 networks:
   pipeline-net:
     driver: bridge
@@ -244,6 +242,7 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
       AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      _PIP_ADDITIONAL_REQUIREMENTS: "redis confluent-kafka"
     volumes:
       - ./dags:/opt/airflow/dags
     depends_on:

@@ -39,7 +39,7 @@ check() {
 
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
-check "Redis"      "docker exec lab-redis redis-cli -a redis1234 ping"
+check "Redis"      "docker exec lab-redis redis-cli -a redis ping"
 
 echo ""
 echo "[메시징·수집]"

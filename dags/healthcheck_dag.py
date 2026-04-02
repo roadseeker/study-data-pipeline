@@ -34,7 +34,7 @@ with DAG(
             "import psycopg2; "
             "c = psycopg2.connect("
             "host='postgres', dbname='pipeline_db', "
-            "user='pipeline', password='pipeline1234'"
+            "user='pipeline', password='pipeline'"
             "); "
             "print('PostgreSQL OK')"
             '"'
@@ -46,7 +46,7 @@ with DAG(
         bash_command=(
             'python -c "'
             "import redis; "
-            "r = redis.Redis(host='redis', password='redis1234'); "
+            "r = redis.Redis(host='redis', password='redis'); "
             "print(r.ping())"
             '"'
         ),

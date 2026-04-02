@@ -76,15 +76,15 @@ COMPOSE_PROJECT_NAME=pipeline-lab
 
 # === PostgreSQL ===
 POSTGRES_USER=pipeline
-POSTGRES_PASSWORD=pipeline1234
+POSTGRES_PASSWORD=pipeline
 POSTGRES_DB=pipeline_db
 
 # === Redis ===
-REDIS_PASSWORD=redis1234
+REDIS_PASSWORD=redis
 
 # === Airflow ===
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://pipeline:pipeline1234@postgres:5432/airflow_db
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://pipeline:pipeline@postgres:5432/airflow_db
 AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
 AIRFLOW__CORE__LOAD_EXAMPLES=false
 AIRFLOW__WEBSERVER__SECRET_KEY=airflow-secret-key-2026
@@ -203,14 +203,14 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db \
 docker exec lab-postgres psql -U pipeline -c "\l" | grep airflow_db
 
 # Redis 검증
-docker exec lab-redis redis-cli -a redis1234 ping
+docker exec lab-redis redis-cli -a redis ping
 # 기대 결과: PONG
 
-docker exec lab-redis redis-cli -a redis1234 SET test:hello "pipeline-lab"
-docker exec lab-redis redis-cli -a redis1234 GET test:hello
+docker exec lab-redis redis-cli -a redis SET test:hello "pipeline-lab"
+docker exec lab-redis redis-cli -a redis GET test:hello
 # 기대 결과: "pipeline-lab"
 
-docker exec lab-redis redis-cli -a redis1234 DEL test:hello
+docker exec lab-redis redis-cli -a redis DEL test:hello
 ```
 
 **Day 1 완료 기준**: PostgreSQL에 transactions 테이블 100건 확인, Redis PING/PONG 정상.
@@ -533,12 +533,12 @@ with DAG(
 
     check_postgres = BashOperator(
         task_id="check_postgres",
-        bash_command='python -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline1234\'); print(\'PostgreSQL OK\')"',
+        bash_command='python -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline\'); print(\'PostgreSQL OK\')"',
     )
 
     check_redis = BashOperator(
         task_id="check_redis",
-        bash_command='python -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis1234\'); print(r.ping())"',
+        bash_command='python -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis\'); print(r.ping())"',
     )
 
     check_kafka = BashOperator(
@@ -650,7 +650,7 @@ check() {
 
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
-check "Redis" "docker exec lab-redis redis-cli -a redis1234 ping"
+check "Redis" "docker exec lab-redis redis-cli -a redis ping"
 
 echo ""
 echo "[메시징·수집]"
@@ -739,8 +739,8 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db -t -A -F'|' \
       FROM transactions GROUP BY user_id ORDER BY tx_count DESC LIMIT 5;"
 
 # 결과를 Redis에 피처로 저장하는 시뮬레이션
-docker exec lab-redis redis-cli -a redis1234 HSET user:features:42 tx_count 15 avg_amount 3500000
-docker exec lab-redis redis-cli -a redis1234 HGETALL user:features:42
+docker exec lab-redis redis-cli -a redis HSET user:features:42 tx_count 15 avg_amount 3500000
+docker exec lab-redis redis-cli -a redis HGETALL user:features:42
 # 기대: tx_count 15 avg_amount 3500000
 ```
 

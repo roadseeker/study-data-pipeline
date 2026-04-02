@@ -1611,7 +1611,7 @@ KAFKA_SERVERS = "localhost:29092,localhost:29093,localhost:29094"
 TOPIC = "paynex.alerts.fraud"
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-REDIS_PASSWORD = "redis1234"
+REDIS_PASSWORD = "redis"
 
 def main():
     consumer = Consumer({
@@ -1660,9 +1660,9 @@ chmod +x scripts/fraud_alert_redis_sink.py
 python3 scripts/fraud_alert_redis_sink.py &
 
 # Redis에서 알림 조회
-docker exec lab-redis redis-cli -a redis1234 ZRANGE fraud:alerts:recent 0 -1
-docker exec lab-redis redis-cli -a redis1234 HGETALL fraud:alert:latest:42
-docker exec lab-redis redis-cli -a redis1234 GET fraud:alert:count:42
+docker exec lab-redis redis-cli -a redis ZRANGE fraud:alerts:recent 0 -1
+docker exec lab-redis redis-cli -a redis HGETALL fraud:alert:latest:42
+docker exec lab-redis redis-cli -a redis GET fraud:alert:count:42
 ```
 
 **Day 3 완료 기준**: FraudDetectionJob 정상 실행, 3가지 규칙(RULE-001·002·003) 탐지 동작 확인, 알림이 `paynex.alerts.fraud` 토픽에 전달, Redis 캐싱 동작 확인.
@@ -2204,7 +2204,7 @@ done
 # 6. Redis 알림 캐시
 echo ""
 echo "[6] Redis 캐시 상태"
-REDIS_KEYS=$(docker exec lab-redis redis-cli -a redis1234 KEYS "fraud:*" 2>/dev/null | wc -l)
+REDIS_KEYS=$(docker exec lab-redis redis-cli -a redis KEYS "fraud:*" 2>/dev/null | wc -l)
 [ "$REDIS_KEYS" -ge 1 ] 2>/dev/null
 check $? "Redis 알림 캐시 존재 ($REDIS_KEYS 키)"
 
