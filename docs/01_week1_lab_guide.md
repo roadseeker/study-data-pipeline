@@ -279,7 +279,7 @@ docker-compose.yml의 services 섹션에 추가:
     networks:
       - pipeline-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/nifi/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://$${HOSTNAME}:8080/nifi/ || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 15
@@ -469,16 +469,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-init
     entrypoint: >
-      bash -c "
-        airflow db init &&
-        airflow users create \
-          --username ${AIRFLOW_ADMIN_USERNAME} \
-          --password ${AIRFLOW_ADMIN_PASSWORD} \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@pipeline-lab.local
-      "
+      bash -c "airflow db migrate &&
+      airflow users create --username ${AIRFLOW_ADMIN_USERNAME} --password ${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname User --role Admin --email admin@pipeline-lab.local"
     environment:
       AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
       AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
@@ -493,6 +485,7 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   airflow-webserver:
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-web
+    restart: unless-stopped
     command: airflow webserver --port 8083
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
@@ -520,6 +513,7 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   airflow-scheduler:
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-sched
+    restart: unless-stopped
     command: airflow scheduler
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
@@ -536,6 +530,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
 ```
 
 ### 3-4. 샘플 Airflow DAG — 환경 검증용
+
+Airflow가 PostgreSQL, Redis, Kafka, Flink에 실제로 연결 가능한지 확인하는 수동 실행용 DAG를 추가한다.
 
 ```python
 # dags/healthcheck_dag.py
@@ -571,7 +567,7 @@ with DAG(
 
     check_kafka = BashOperator(
         task_id="check_kafka",
-        bash_command='python3 -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
+        bash_command='python -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
     )
 
     check_flink = BashOperator(
@@ -587,6 +583,67 @@ with DAG(
     [check_postgres, check_redis, check_kafka, check_flink] >> report
 ```
 
+파일 생성 후 Airflow가 DAG를 인식하는지 확인한다.
+
+```bash
+# Git Bash 사용 시 `/opt/...` 경로가 Windows 경로로 잘못 변환될 수 있으므로
+# 컨테이너 내부 절대경로는 `sh -lc '...'` 형태로 감싸서 실행한다.
+
+# Airflow 컨테이너에서 DAG 파일 확인
+docker exec lab-airflow-web sh -lc "ls -l /opt/airflow/dags"
+
+# DAG 목록에서 environment_healthcheck 확인
+docker exec lab-airflow-web airflow dags list | grep environment_healthcheck
+```
+
+기대 결과:
+- `/opt/airflow/dags/healthcheck_dag.py` 파일이 보인다
+- `airflow dags list` 출력에 `environment_healthcheck`가 포함된다
+
+수동 실행 검증은 UI 또는 CLI 중 편한 방법으로 진행한다.
+
+```bash
+# 방법 1: CLI로 DAG 수동 실행
+docker exec lab-airflow-web airflow dags trigger environment_healthcheck
+
+# 실행 상태 확인
+docker exec lab-airflow-web airflow dags list-runs -d environment_healthcheck
+
+# 태스크 인스턴스 상태 확인
+docker exec lab-airflow-web airflow tasks states-for-dag-run environment_healthcheck <dag_run_id>
+```
+
+`<dag_run_id>`는 `list-runs`에서 확인한 값으로 바꿔 넣는다. 모든 태스크가 `success`이면 검증 통과다.
+
+브라우저에서 확인하려면 아래 순서로 진행한다.
+
+```text
+1. http://localhost:8083 접속
+2. admin / airflow 로그인
+3. environment_healthcheck DAG 활성화
+4. Trigger DAG 클릭
+5. Graph 또는 Grid 화면에서 check_postgres, check_redis, check_kafka, check_flink, generate_report가 모두 success인지 확인
+```
+
+실행 로그까지 확인하려면 다음 명령을 사용한다.
+
+```bash
+# 최근 DAG 실행 로그 확인
+docker exec lab-airflow-sched airflow dags list-runs -d environment_healthcheck
+
+# 스케줄러 로그에서 task 실행 흔적 확인
+docker compose logs airflow-scheduler --tail 200
+```
+
+기대 결과:
+- `check_postgres`: `PostgreSQL OK`
+- `check_redis`: `True`
+- `check_kafka`: `Kafka brokers: 1`
+- `check_flink`: Flink overview JSON 출력 후 `Flink OK`
+- `generate_report`: 완료 시각 출력
+
+검증이 끝나면 Day 3 완료 기준에 Airflow 연결성 검증까지 포함된 것으로 본다.
+
 ### 3-5. 컴포넌트별 기동 및 검증
 
 ```bash
@@ -594,8 +651,8 @@ with DAG(
 docker compose up -d flink-jobmanager flink-taskmanager
 
 # Flink 대시보드 확인
-curl -sf http://localhost:8081/overview | python3 -m json.tool
-# 기대: taskmanagers: 1, slots-total: 4
+curl -sf http://localhost:8081/overview
+# 기대: JSON 응답에 "taskmanagers":1, "slots-total":4 포함
 
 # Spark 기동
 docker compose up -d spark-master spark-worker
@@ -608,8 +665,8 @@ docker compose up -d airflow-init
 docker compose up -d airflow-webserver airflow-scheduler
 
 # Airflow 웹 UI 확인
-curl -sf http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = healthy, scheduler.status = healthy
+curl -sf http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"healthy"}, "scheduler":{"status":"healthy"} 포함
 ```
 
 **웹 UI 접속 정보**:
@@ -827,16 +884,18 @@ docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
 docker stop lab-postgres
 
 # Airflow 상태 확인 (DB 연결 실패)
-curl -s http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = unhealthy
+curl -s http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"unhealthy"} 포함
 
 # PostgreSQL 재기동
 docker start lab-postgres
 
 # 30초 대기 후 Airflow 복구 확인
+# restart 정책이 있으면 scheduler/webserver가 DB 복구 후 자동 재시작될 수 있다.
 sleep 30
-curl -s http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = healthy
+curl -s http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"healthy"} 포함
+# 기대: scheduler.status 도 healthy 로 복구
 ```
 
 **시나리오 C: Flink TaskManager 장애 및 복구**
@@ -846,67 +905,53 @@ curl -s http://localhost:8083/health | python3 -m json.tool
 docker stop lab-flink-tm
 
 # JobManager 대시보드에서 Available Task Slots = 0 확인
-curl -s http://localhost:8081/overview | python3 -m json.tool
+curl -s http://localhost:8081/overview
 
 # TaskManager 재기동
 docker start lab-flink-tm
 
 # 슬롯 복구 확인
 sleep 15
-curl -s http://localhost:8081/overview | python3 -m json.tool
-# 기대: taskmanagers: 1, slots-available: 4
+curl -s http://localhost:8081/overview
+# 기대: JSON 응답에 "taskmanagers":1, "slots-available":4 포함
 ```
 
-### 5-2. 장애 테스트 결과 기록 템플릿
+### 5-2. 장애 테스트 결과 기록
+
+현재 실습에서 실제로 확인한 결과는 아래와 같다.
 
 ```markdown
 ## 장애 테스트 결과
 
 | 시나리오 | 중단 대상 | 영향 범위 | 복구 소요 시간 | 데이터 손실 여부 | 비고 |
 |----------|----------|----------|-------------|---------------|------|
-| A | Kafka | 프로듀서/컨슈머 일시 중단 | ~30초 | 없음 (로그 보존) | |
-| B | PostgreSQL | Airflow 메타DB 연결 실패 | ~30초 | 없음 (볼륨 유지) | |
-| C | Flink TM | 스트림 처리 중단 | ~15초 | 작업 재시작 필요 | |
+| A | Kafka | Kafka 토픽 조회 및 프로듀스/컨슈머 테스트 일시 중단, 타 서비스는 계속 실행 | 약 30초 | 없음 | `paynex-transactions` 토픽과 기존 메시지 10건 재조회 성공 |
+| B | PostgreSQL | Airflow health endpoint 비정상 전환, metadatabase/scheduler 상태 unhealthy 확인 | 약 30초 | 없음 | PostgreSQL 재기동 후 `scheduler.status=healthy`까지 복구 확인 |
+| C | Flink TaskManager | Flink 슬롯 4개 모두 소실, JobManager overview에서 `taskmanagers=0` 확인 | 약 15초 | 없음 | TaskManager 재기동 후 `taskmanagers=1`, `slots-available=4` 복구 확인 |
 ```
+
+장애 테스트 해석:
+- Kafka는 단일 브로커 실습 환경에서도 재기동 후 토픽과 메시지가 유지되었다.
+- PostgreSQL은 Airflow의 핵심 의존성으로, 장애 시 Airflow health가 즉시 비정상으로 전환되었다.
+- Flink는 TaskManager 장애 시 처리 슬롯이 사라지고, 재기동 후 슬롯이 정상 복구되었다.
 
 ### 5-3. 환경 문서화 — README.md 작성
 
-```markdown
-# Pipeline Lab — 데이터 파이프라인 실습 환경
+Week 1 기준 환경 문서는 저장소 루트의 [README.md](/c:/Users/roadseeker/study/study-data-pipeline/README.md)에 정리한다. README에는 최소한 아래 내용을 포함한다.
 
-## 아키텍처 개요
+- 아키텍처 개요: `수집(Kafka·NiFi) → 변환(Flink·Spark) → 저장(PostgreSQL·Redis) → 오케스트레이션(Airflow)`
+- 서비스 구성: 컨테이너명, 포트, 역할
+- 빠른 시작: `docker compose up -d`, `bash scripts/healthcheck-all.sh`
+- 접속 정보: NiFi, Flink, Spark, Airflow URL 및 계정
+- 프로젝트 구조: `dags/`, `docs/`, `scripts/`, `spark-etl/`, `spark-jobs/`, `flink-jobs/`, `data/`
+- 종료 및 초기화: `docker compose down`, `docker compose down -v`
 
-수집(Kafka·NiFi) → 변환(Flink·Spark) → 저장(PostgreSQL·Redis) → 오케스트레이션(Airflow)
-
-## 서비스 구성
-
-| 서비스 | 컨테이너 | 포트 | 용도 |
-|--------|---------|------|------|
-| PostgreSQL 16 | lab-postgres | 5432 | 메타데이터·샘플 DB |
-| Redis 7 | lab-redis | 6379 | 피처 스토어·캐시 |
-| Kafka 3.7 (KRaft) | lab-kafka | 29092 | 실시간 메시징 |
-| NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
-| Flink 1.18 | lab-flink-jm/tm | 8081 | 실시간 스트림 처리 |
-| Spark 3.5 | lab-spark-master | 8082 | 배치 처리 |
-| Airflow 2.8 | lab-airflow-web | 8083 | 워크플로우 오케스트레이션 |
-
-## 빠른 시작
-
-docker compose up -d
-bash scripts/healthcheck-all.sh
-
-## 접속 정보
-
-- NiFi: http://localhost:8080/nifi (admin / nifi)
-- Flink: http://localhost:8081
-- Spark: http://localhost:8082
-- Airflow: http://localhost:8083 (admin / airflow)
-
-## 종료 및 정리
-
-docker compose down        # 컨테이너 중단 (데이터 보존)
-docker compose down -v     # 컨테이너 + 볼륨 삭제 (초기화)
-```
+현재 README 반영 상태:
+- 전체 스택 아키텍처 개요 정리 완료
+- 서비스 구성 및 포트 문서화 완료
+- 빠른 시작/접속 정보 정리 완료
+- 프로젝트 구조 설명 포함
+- 종료 및 정리 명령 포함
 
 ### 5-4. 최종 정리 및 Week 2 준비
 
@@ -914,22 +959,18 @@ docker compose down -v     # 컨테이너 + 볼륨 삭제 (초기화)
 # 전체 환경 최종 검증
 bash scripts/healthcheck-all.sh
 
-# Week 2 준비: 연동 테스트용 토픽 생성 (Week 2에서 정식 명명규칙에 따라 재생성 예정)
+# Week 2 준비: Kafka 토픽 검증 상태 확인
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --create --topic test.connectivity-check \
-  --partitions 3 \
-  --replication-factor 1'
-
-# Git 초기화 및 커밋
-cd pipeline-lab
-git init
-echo "postgres-data/\nredis-data/" > .gitignore
-git add .
-git commit -m "Week 1: 전체 스택 환경 구성 완료 — 7개 컴포넌트 Docker Compose"
+  --bootstrap-server localhost:9092 --list'
 ```
 
-**Day 5 완료 기준**: 장애 시나리오 3건 테스트 완료, README.md 작성, Git 첫 커밋.
+Week 2 준비 포인트:
+- `paynex-transactions` 토픽이 정상 동작하는지 이미 확인했다.
+- Week 2에서는 이 토픽을 임시 검증용 자산으로 보고, 정식 명명 규칙 기반 토픽(`paynex.transactions.payment` 등)으로 재구성할 준비를 한다.
+- Git Bash 사용 시 `docker exec ... sh -c '...'` 패턴을 유지한다.
+- `.sh` 파일 줄바꿈 오류 재발 방지를 위해 저장소 루트에 `.gitattributes`를 추가했다.
+
+**Day 5 완료 기준**: 장애 시나리오 3건 테스트 완료, README.md 정리 완료, Week 2 진행 준비 완료.
 
 ---
 
@@ -937,13 +978,13 @@ git commit -m "Week 1: 전체 스택 환경 구성 완료 — 7개 컴포넌트 
 
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docker-compose.yml (7개 서비스 정의) | ☐ |
-| 2 | .env 환경 변수 파일 | ☐ |
-| 3 | scripts/init-db.sql (PostgreSQL 초기화) | ☐ |
-| 4 | scripts/healthcheck-all.sh (통합 헬스체크) | ☐ |
-| 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☐ |
-| 6 | 장애 테스트 결과 기록 | ☐ |
-| 7 | README.md (환경 문서) | ☐ |
+| 1 | docker-compose.yml (7개 서비스 정의) | ☑ |
+| 2 | .env 환경 변수 파일 | ☑ |
+| 3 | scripts/init-db.sql (PostgreSQL 초기화) | ☑ |
+| 4 | scripts/healthcheck-all.sh (통합 헬스체크) | ☑ |
+| 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☑ |
+| 6 | 장애 테스트 결과 기록 | ☑ |
+| 7 | README.md (환경 문서) | ☑ |
 | 8 | Git 초기 커밋 | ☐ |
 
 ## 포트 맵 요약

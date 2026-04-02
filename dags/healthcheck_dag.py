@@ -55,7 +55,7 @@ with DAG(
     check_kafka = BashOperator(
         task_id="check_kafka",
         bash_command=(
-            'python3 -c "'
+            'python -c "'
             "from confluent_kafka.admin import AdminClient; "
             "a = AdminClient({'bootstrap.servers': 'kafka:9092'}); "
             "print('Kafka brokers:', len(a.list_topics(timeout=5).brokers))"
