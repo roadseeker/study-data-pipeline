@@ -34,7 +34,7 @@ After Week 8, Domain B ML practice begins (Weeks 9–16: classification, regress
 | Layer | Tools |
 |-------|-------|
 | Ingest | Apache Kafka 3.7 (KRaft mode), Apache NiFi 1.25, Kafka Connect |
-| Transform | Apache Flink 1.18, Apache Spark 3.5, dbt Core |
+| Transform | Apache Flink 1.18, Apache Spark 3.5 (official `apache/spark` image), dbt Core |
 | Store | Delta Lake, Apache Iceberg, HDFS, Amazon S3, PostgreSQL 16 |
 | Orchestration | Apache Airflow 2.8 |
 | Migration | Spark JDBC, Debezium (CDC) |

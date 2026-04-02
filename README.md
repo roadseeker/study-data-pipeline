@@ -15,7 +15,7 @@
 | Kafka 3.7 (KRaft) | lab-kafka | 29092 | 실시간 메시징 |
 | NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
 | Flink 1.18 | lab-flink-jm / lab-flink-tm | 8081 | 실시간 스트림 처리 |
-| Spark 3.5 | lab-spark-master / lab-spark-worker | 8082, 7077 | 배치 처리 |
+| Spark 3.5 (official Apache image) | lab-spark-master / lab-spark-worker | 8082, 7077 | 배치 처리 |
 | Airflow 2.8 | lab-airflow-web / lab-airflow-sched | 8083 | 워크플로우 오케스트레이션 |
 
 ## 빠른 시작

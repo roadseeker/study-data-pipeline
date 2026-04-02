@@ -394,11 +394,17 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   # Spark — 배치 처리
   # ──────────────────────────────────────
   spark-master:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: lab-spark-master
-    environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
     ports:
       - "8082:8080"
       - "7077:7077"
@@ -415,13 +421,18 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
       retries: 10
 
   spark-worker:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: lab-spark-worker
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --cores
+      - "2"
+      - --memory
+      - 2g
+      - --webui-port
+      - "8081"
     depends_on:
       spark-master:
         condition: service_healthy
@@ -432,6 +443,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
     networks:
       - pipeline-net
 ```
+
+> 참고: Spark는 `bitnami/spark` 대신 공식 이미지 `apache/spark:3.5.1` 기준으로 구성하며, `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
 
 ### 3-3. Airflow 서비스 추가
 
