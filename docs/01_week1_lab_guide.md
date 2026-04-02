@@ -82,7 +82,13 @@ POSTGRES_DB=pipeline_db
 # === Redis ===
 REDIS_PASSWORD=redis
 
+# === NiFi ===
+NIFI_USERNAME=admin
+NIFI_PASSWORD=nifi
+
 # === Airflow ===
+AIRFLOW_ADMIN_USERNAME=admin
+AIRFLOW_ADMIN_PASSWORD=airflow
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
 AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://pipeline:pipeline@postgres:5432/airflow_db
 AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
@@ -200,7 +206,7 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db \
   -c "SELECT tx_type, count(*), round(avg(amount),0) AS avg_amt FROM transactions GROUP BY tx_type;"
 
 # Airflow DB 생성 확인
-docker exec lab-postgres psql -U pipeline -c "\l" | grep airflow_db
+docker exec lab-postgres psql -U pipeline -d pipeline_db -c "\l" | grep airflow_db
 
 # Redis 검증
 docker exec lab-redis redis-cli -a redis ping
@@ -266,8 +272,8 @@ docker-compose.yml의 services 섹션에 추가:
     container_name: lab-nifi
     environment:
       NIFI_WEB_HTTP_PORT: 8080
-      SINGLE_USER_CREDENTIALS_USERNAME: admin
-      SINGLE_USER_CREDENTIALS_PASSWORD: nifi1234admin
+      SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
     ports:
       - "8080:8080"
     networks:
@@ -331,7 +337,7 @@ docker logs -f lab-nifi 2>&1 | grep -i "started"
 curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
 
-브라우저에서 `http://localhost:8080/nifi/` 접속하여 로그인 (admin / nifi1234admin).
+브라우저에서 `http://localhost:8080/nifi/` 접속하여 로그인 (admin / nifi).
 
 **NiFi 기본 검증 플로우 생성 (UI에서 수행)**:
 
@@ -459,14 +465,16 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
       bash -c "
         airflow db init &&
         airflow users create \
-          --username admin \
-          --password admin1234 \
+          --username ${AIRFLOW_ADMIN_USERNAME} \
+          --password ${AIRFLOW_ADMIN_PASSWORD} \
           --firstname Admin \
           --lastname User \
           --role Admin \
           --email admin@pipeline-lab.local
       "
     environment:
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     depends_on:
@@ -603,7 +611,7 @@ curl -sf http://localhost:8083/health | python3 -m json.tool
 |--------|-----|------|
 | Flink Dashboard | http://localhost:8081 | (인증 없음) |
 | Spark Master | http://localhost:8082 | (인증 없음) |
-| Airflow | http://localhost:8083 | admin / admin1234 |
+| Airflow | http://localhost:8083 | admin / airflow |
 
 **Day 3 완료 기준**: Flink 대시보드에서 TaskManager 1개·슬롯 4개 확인, Spark Master에 Worker 1개 등록 확인, Airflow 웹 UI 로그인 성공.
 
@@ -882,10 +890,10 @@ bash scripts/healthcheck-all.sh
 
 ## 접속 정보
 
-- NiFi: http://localhost:8080/nifi (admin / nifi1234admin)
+- NiFi: http://localhost:8080/nifi (admin / nifi)
 - Flink: http://localhost:8081
 - Spark: http://localhost:8082
-- Airflow: http://localhost:8083 (admin / admin1234)
+- Airflow: http://localhost:8083 (admin / airflow)
 
 ## 종료 및 정리
 

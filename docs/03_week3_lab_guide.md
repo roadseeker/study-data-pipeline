@@ -448,8 +448,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
     container_name: lab-nifi
     environment:
       NIFI_WEB_HTTP_PORT: 8080
-      SINGLE_USER_CREDENTIALS_USERNAME: admin
-      SINGLE_USER_CREDENTIALS_PASSWORD: nifi1234admin
+      SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
     ports:
       - "8080:8080"
     volumes:

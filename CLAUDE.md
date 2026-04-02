@@ -109,10 +109,10 @@ pipeline-lab/
 | PostgreSQL | lab-postgres | 5432 |
 | Redis | lab-redis | 6379 |
 | Kafka (KRaft) | lab-kafka | 29092 |
-| NiFi | lab-nifi | 8080 (http://localhost:8080/nifi, admin/nifi1234admin) |
+| NiFi | lab-nifi | 8080 (http://localhost:8080/nifi, admin/nifi) |
 | Flink JobManager | lab-flink-jm | 8081 |
 | Spark Master | lab-spark-master | 8082, 7077 |
-| Airflow | lab-airflow-web | 8083 (admin/admin1234) |
+| Airflow | lab-airflow-web | 8083 (admin/airflow) |
 | MySQL (legacy, Week 6) | lab-mysql | 3306 |
 | Kafka Connect (Week 6) | lab-kafka-connect | 8084 |
 | Payment API (Week 3) | lab-payment-api | 5050 |

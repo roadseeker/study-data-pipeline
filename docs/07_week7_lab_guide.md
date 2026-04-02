@@ -148,8 +148,8 @@ DOCKERFILE
       bash -c "
         airflow db init &&
         airflow users create
-          --username admin
-          --password admin1234
+          --username ${AIRFLOW_ADMIN_USERNAME}
+          --password ${AIRFLOW_ADMIN_PASSWORD}
           --firstname Admin
           --lastname User
           --role Admin

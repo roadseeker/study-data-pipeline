@@ -32,10 +32,10 @@ bash scripts/healthcheck-all.sh
 
 | 서비스 | URL | 계정 |
 |--------|-----|------|
-| NiFi | http://localhost:8080/nifi | admin / nifi1234admin |
+| NiFi | http://localhost:8080/nifi | admin / nifi |
 | Flink Dashboard | http://localhost:8081 | (인증 없음) |
 | Spark Master | http://localhost:8082 | (인증 없음) |
-| Airflow | http://localhost:8083 | admin / admin1234 |
+| Airflow | http://localhost:8083 | admin / airflow |
 
 ## 프로젝트 구조
 

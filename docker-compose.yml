@@ -88,8 +88,8 @@ services:
     container_name: lab-nifi
     environment:
       NIFI_WEB_HTTP_PORT: 8080
-      SINGLE_USER_CREDENTIALS_USERNAME: admin
-      SINGLE_USER_CREDENTIALS_PASSWORD: nifi1234admin
+      SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
     ports:
       - "8080:8080"
     networks:
@@ -201,14 +201,16 @@ services:
       bash -c "
         airflow db init &&
         airflow users create \
-          --username admin \
-          --password admin1234 \
+          --username ${AIRFLOW_ADMIN_USERNAME} \
+          --password ${AIRFLOW_ADMIN_PASSWORD} \
           --firstname Admin \
           --lastname User \
           --role Admin \
           --email admin@pipeline-lab.local
       "
     environment:
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     depends_on:
