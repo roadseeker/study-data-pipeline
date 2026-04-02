@@ -209,14 +209,14 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db \
 docker exec lab-postgres psql -U pipeline -d pipeline_db -c "\l" | grep airflow_db
 
 # Redis 검증
-docker exec lab-redis redis-cli -a redis ping
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping
 # 기대 결과: PONG
 
-docker exec lab-redis redis-cli -a redis SET test:hello "pipeline-lab"
-docker exec lab-redis redis-cli -a redis GET test:hello
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli SET test:hello "pipeline-lab"
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli GET test:hello
 # 기대 결과: "pipeline-lab"
 
-docker exec lab-redis redis-cli -a redis DEL test:hello
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli DEL test:hello
 ```
 
 **Day 1 완료 기준**: PostgreSQL에 transactions 테이블 100건 확인, Redis PING/PONG 정상.
@@ -292,35 +292,38 @@ docker-compose.yml의 services 섹션에 추가:
 # 기동
 docker compose up -d kafka
 
+# Git Bash 사용 시 `/opt/...` 경로가 Windows 경로로 잘못 변환될 수 있으므로
+# Kafka CLI는 `docker exec ... sh -c '...'` 형태로 실행한다.
+
 # 토픽 생성
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --topic test-transactions \
   --partitions 3 \
-  --replication-factor 1
+  --replication-factor 1'
 
 # 토픽 목록 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list'
 # 기대 결과: test-transactions
 
 # 토픽 상세 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --describe --topic test-transactions
+  --describe --topic test-transactions'
 
 # 메시지 프로듀스 테스트
 echo '{"tx_id":1,"user_id":42,"amount":150000,"type":"PAYMENT"}' | \
-docker exec -i lab-kafka /opt/kafka/bin/kafka-console-producer.sh \
+docker exec -i lab-kafka sh -c '/opt/kafka/bin/kafka-console-producer.sh \
   --bootstrap-server localhost:9092 \
-  --topic test-transactions
+  --topic test-transactions'
 
 # 메시지 컨슈머 테스트
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic test-transactions \
   --from-beginning \
-  --max-messages 1
+  --max-messages 1'
 # 기대 결과: {"tx_id":1,"user_id":42,"amount":150000,"type":"PAYMENT"}
 ```
 
@@ -337,14 +340,18 @@ docker logs -f lab-nifi 2>&1 | grep -i "started"
 curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
 
-브라우저에서 `http://localhost:8080/nifi/` 접속하여 로그인 (admin / nifi).
+브라우저에서 `http://localhost:8080/nifi/` 접속한다. 최초 접속 시 로그인 화면이 나타나면 `admin / nifi`로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
 
 **NiFi 기본 검증 플로우 생성 (UI에서 수행)**:
 
-1. GenerateFlowFile 프로세서 추가 — 테스트 데이터 자동 생성
-2. LogAttribute 프로세서 추가 — 데이터 속성 로깅
-3. 두 프로세서를 Connection으로 연결
-4. 시작 후 LogAttribute에서 FlowFile 수신 확인
+1. `GenerateFlowFile` 프로세서 추가 — 테스트용 FlowFile 자동 생성
+2. `LogAttribute` 프로세서 추가 — FlowFile 속성 로그 기록
+3. `GenerateFlowFile`의 `success` relationship을 `LogAttribute`에 Connection으로 연결
+4. `LogAttribute` 설정의 `Relationships` 탭에서 `success -> terminate`를 체크하여 최종 출력 relationship을 자동 종료로 설정
+5. 두 프로세서를 시작하고 Connection 큐가 `0 (0 bytes)`로 유지되는지 확인
+6. `LogAttribute`의 `In` 값이 증가하는지 확인하여 FlowFile 수신을 검증
+
+> 참고: `LogAttribute`의 `success`가 어디에도 연결되지 않았고 `terminate`도 체크되지 않으면 `Relationship success is invalid...` 경고와 함께 프로세서를 시작할 수 없다.
 
 **Day 2 완료 기준**: Kafka 토픽 생성·메시지 송수신 확인, NiFi 웹 UI 접속 및 기본 플로우 작동.
 
@@ -671,11 +678,11 @@ check() {
 
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
-check "Redis" "docker exec lab-redis redis-cli -a redis ping"
+check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
 
 echo ""
 echo "[메시징·수집]"
-check "Kafka" "docker exec ${KAFKA_CONTAINER} /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list"
+check "Kafka" "docker exec ${KAFKA_CONTAINER} sh -c '/opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list'"
 check "NiFi" "curl -sf http://localhost:8080/nifi/"
 
 echo ""
@@ -729,26 +736,26 @@ bash scripts/healthcheck-all.sh
 
 ```bash
 # 실습용 임시 토픽 생성 (Week 2에서 정식 토픽으로 교체 예정)
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --topic paynex-transactions \
   --partitions 3 \
-  --replication-factor 1
+  --replication-factor 1'
 
 # 샘플 거래 데이터 10건 프로듀스
 for i in $(seq 1 10); do
   echo "{\"tx_id\":$i,\"user_id\":$((RANDOM % 1000)),\"amount\":$((RANDOM % 5000000 + 10000)),\"type\":\"PAYMENT\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" | \
-  docker exec -i lab-kafka /opt/kafka/bin/kafka-console-producer.sh \
+  docker exec -i lab-kafka sh -c '/opt/kafka/bin/kafka-console-producer.sh \
     --bootstrap-server localhost:9092 \
-    --topic paynex-transactions
+    --topic paynex-transactions'
 done
 
 # 컨슈머로 수신 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic paynex-transactions \
   --from-beginning \
-  --max-messages 10
+  --max-messages 10'
 ```
 
 ### 4-4. 연동 검증 실습 — PostgreSQL → Redis 피처 캐싱 시뮬레이션
@@ -760,8 +767,8 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db -t -A -F'|' \
       FROM transactions GROUP BY user_id ORDER BY tx_count DESC LIMIT 5;"
 
 # 결과를 Redis에 피처로 저장하는 시뮬레이션
-docker exec lab-redis redis-cli -a redis HSET user:features:42 tx_count 15 avg_amount 3500000
-docker exec lab-redis redis-cli -a redis HGETALL user:features:42
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli HSET user:features:42 tx_count 15 avg_amount 3500000
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli HGETALL user:features:42
 # 기대: tx_count 15 avg_amount 3500000
 ```
 
@@ -786,9 +793,9 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
 ```bash
 # 현재 토픽 상태 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --describe --topic paynex-transactions
+  --describe --topic paynex-transactions'
 
 # Kafka 컨테이너 강제 중단
 docker stop lab-kafka
@@ -801,15 +808,15 @@ docker start lab-kafka
 
 # 30초 대기 후 복구 확인
 sleep 30
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list'
 
 # 기존 메시지 보존 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic paynex-transactions \
   --from-beginning \
-  --max-messages 10
+  --max-messages 10'
 # 기대: 이전에 프로듀스한 10건 그대로 존재
 ```
 
@@ -908,11 +915,11 @@ docker compose down -v     # 컨테이너 + 볼륨 삭제 (초기화)
 bash scripts/healthcheck-all.sh
 
 # Week 2 준비: 연동 테스트용 토픽 생성 (Week 2에서 정식 명명규칙에 따라 재생성 예정)
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --topic test.connectivity-check \
   --partitions 3 \
-  --replication-factor 1
+  --replication-factor 1'
 
 # Git 초기화 및 커밋
 cd pipeline-lab

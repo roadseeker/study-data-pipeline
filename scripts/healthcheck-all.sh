@@ -39,11 +39,11 @@ check() {
 
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
-check "Redis"      "docker exec lab-redis redis-cli -a redis ping"
+check "Redis"      "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
 
 echo ""
 echo "[메시징·수집]"
-check "Kafka" "docker exec ${KAFKA_CONTAINER} /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list"
+check "Kafka" "docker exec ${KAFKA_CONTAINER} sh -c '/opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list'"
 check "NiFi"  "curl -sf http://localhost:8080/nifi/"
 
 echo ""
