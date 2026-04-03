@@ -11,7 +11,7 @@
 
 ### 배경 설정
 
-Week 5에서 Spark 기반 Delta Lake 메달리온 아키텍처가 완성되었다. Bronze·Silver·Gold 3단계 ETL 파이프라인이 정상 작동하고, 타임 트래블로 감사 추적도 가능해졌다. 그런데 페이넥스(PayNex) CIO가 근본적인 문제를 제기한다.
+Week 5에서 Spark 기반 Delta Lake 메달리온 아키텍처가 완성되었다. Bronze·Silver·Gold 3단계 ETL 파이프라인이 정상 작동하고, 타임 트래블로 감사 추적도 가능해졌다. 그런데 Nexus Pay CIO가 근본적인 문제를 제기한다.
 
 > "파이프라인과 데이터 레이크는 훌륭합니다. 그런데 정작 **우리 핵심 데이터가 아직 레거시 MySQL에 갇혀 있습니다**. 10년간 운영해 온 정산 시스템의 MySQL에 고객 마스터, 가맹점 정보, 정산 이력 3억 건이 있어요. 이걸 Delta Lake로 옮기지 않으면 아무리 파이프라인이 좋아도 **분석할 데이터 자체가 없습니다**."
 >
@@ -159,7 +159,7 @@ EOF
 
 ### 1-2. 레거시 MySQL 환경 구성
 
-페이넥스(PayNex) 레거시 정산 시스템의 MySQL을 Docker Compose에 추가한다.
+Nexus Pay 레거시 정산 시스템의 MySQL을 Docker Compose에 추가한다.
 
 docker-compose.yml의 services 섹션에 추가:
 
@@ -172,9 +172,9 @@ docker-compose.yml의 services 섹션에 추가:
     container_name: lab-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root1234
-      MYSQL_DATABASE: paynex_legacy
-      MYSQL_USER: paynex
-      MYSQL_PASSWORD: paynex1234
+      MYSQL_DATABASE: nexuspay_legacy
+      MYSQL_USER: Nexus Pay
+      MYSQL_PASSWORD: nexuspay1234
     command:
       - --server-id=1
       - --log-bin=mysql-bin
@@ -215,12 +215,12 @@ volumes:
 
 ### 1-3. 레거시 DB 스키마 설계 및 샘플 데이터 적재
 
-페이넥스 정산 시스템의 4개 핵심 테이블을 설계한다.
+Nexus Pay 정산 시스템의 4개 핵심 테이블을 설계한다.
 
 ```bash
 cat > scripts/init-mysql.sql << 'SQLEOF'
 -- ============================================
--- PayNex 레거시 정산 시스템 — 초기 데이터
+-- Nexus Pay 레거시 정산 시스템 — 초기 데이터
 -- Week 6: 이관 실습용
 -- ============================================
 
@@ -229,7 +229,7 @@ CREATE USER IF NOT EXISTS 'debezium'@'%' IDENTIFIED BY 'debezium1234';
 GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
 FLUSH PRIVILEGES;
 
-USE paynex_legacy;
+USE nexuspay_legacy;
 
 -- ──────────────────────────────────────
 -- 1. 고객 마스터 테이블 (변경 빈도: 낮음 → Full Export 대상)
@@ -322,7 +322,7 @@ BEGIN
         INSERT INTO customers (name, email, phone, grade, status, created_at)
         VALUES (
             CONCAT('고객_', LPAD(i, 4, '0')),
-            CONCAT('user', i, '@paynex.co.kr'),
+            CONCAT('user', i, '@nexuspay.co.kr'),
             CONCAT('010-', LPAD(FLOOR(RAND()*10000), 4, '0'), '-', LPAD(FLOOR(RAND()*10000), 4, '0')),
             grades,
             IF(RAND() < 0.9, 'ACTIVE', IF(RAND() < 0.5, 'DORMANT', 'WITHDRAWN')),
@@ -444,7 +444,7 @@ docker compose up -d mysql
 docker compose ps mysql
 
 # 데이터 적재 확인
-docker exec lab-mysql mysql -u paynex -ppaynex1234 paynex_legacy \
+docker exec lab-mysql mysql -u nexuspay -pnexuspay1234 nexuspay_legacy \
   -e "SELECT 'customers' AS tbl, COUNT(*) AS cnt FROM customers
       UNION ALL SELECT 'merchants', COUNT(*) FROM merchants
       UNION ALL SELECT 'transactions', COUNT(*) FROM transactions
@@ -493,7 +493,7 @@ docker exec lab-mysql mysql -u root -proot1234 \
 
 ```bash
 cat > docs/migration-target-tables.md << 'EOF'
-# PayNex 레거시 DB — 이관 대상 테이블 분류
+# Nexus Pay 레거시 DB — 이관 대상 테이블 분류
 
 ## 이관 전략 매핑
 
@@ -543,16 +543,16 @@ from datetime import datetime
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-JDBC-FullExport") \
+        .appName("nexuspay-JDBC-FullExport") \
         .config("spark.jars.packages", "io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
 
-JDBC_URL = "jdbc:mysql://mysql:3306/paynex_legacy"
+JDBC_URL = "jdbc:mysql://mysql:3306/nexuspay_legacy"
 JDBC_PROPS = {
-    "user": "paynex",
-    "password": "paynex1234",
+    "user": "nexuspay",
+    "password": "nexuspay1234",
     "driver": "com.mysql.cj.jdbc.Driver"
 }
 
@@ -588,7 +588,7 @@ def full_export_table(spark, table_name, partition_column=None, num_partitions=4
         )
 
     df = reader.withColumn("_ingested_at", current_timestamp()) \
-               .withColumn("_source", lit("mysql.paynex_legacy")) \
+               .withColumn("_source", lit("mysql.nexuspay_legacy")) \
                .withColumn("_migration_type", lit("jdbc_full_export")) \
                .withColumn("_batch_id", lit(datetime.now().strftime("%Y%m%d_%H%M%S")))
 
@@ -607,7 +607,7 @@ def main():
     spark = create_spark()
 
     print("\n" + "="*60)
-    print(" PayNex 레거시 DB → Delta Lake Bronze 초기 적재")
+    print(" Nexus Pay 레거시 DB → Delta Lake Bronze 초기 적재")
     print(" 방식: Spark JDBC Full Export")
     print(f" 시작: {datetime.now()}")
     print("="*60)
@@ -678,16 +678,16 @@ from datetime import datetime
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-JDBC-Incremental") \
+        .appName("nexuspay-JDBC-Incremental") \
         .config("spark.jars.packages", "io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
 
-JDBC_URL = "jdbc:mysql://mysql:3306/paynex_legacy"
+JDBC_URL = "jdbc:mysql://mysql:3306/nexuspay_legacy"
 JDBC_PROPS = {
-    "user": "paynex",
-    "password": "paynex1234",
+    "user": "nexuspay",
+    "password": "nexuspay1234",
     "driver": "com.mysql.cj.jdbc.Driver"
 }
 
@@ -726,7 +726,7 @@ def incremental_import(spark, table, check_column, last_value, target_path):
         return 0
 
     df = df.withColumn("_ingested_at", current_timestamp()) \
-           .withColumn("_source", lit("mysql.paynex_legacy")) \
+           .withColumn("_source", lit("mysql.nexuspay_legacy")) \
            .withColumn("_migration_type", lit("incremental_append")) \
            .withColumn("_batch_id", lit(datetime.now().strftime("%Y%m%d_%H%M%S")))
 
@@ -755,7 +755,7 @@ PYEOF
 
 ```bash
 # MySQL에 신규 거래 1,000건 추가 (실시간 유입 시뮬레이션)
-docker exec lab-mysql mysql -u paynex -ppaynex1234 paynex_legacy << 'SQL'
+docker exec lab-mysql mysql -u nexuspay -pnexuspay1234 nexuspay_legacy << 'SQL'
 DELIMITER //
 CREATE PROCEDURE generate_new_tx()
 BEGIN
@@ -784,8 +784,8 @@ docker exec lab-spark-master spark-submit \
   --packages io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33 \
   /opt/spark-jobs/migration/jdbc_incremental.py
 
-NEW_TOTAL=$(docker exec lab-mysql mysql -u paynex -ppaynex1234 -N \
-  -e "SELECT COUNT(*) FROM paynex_legacy.transactions")
+NEW_TOTAL=$(docker exec lab-mysql mysql -u nexuspay -pnexuspay1234 -N \
+  -e "SELECT COUNT(*) FROM nexuspay_legacy.transactions")
 echo "MySQL 총 건수: ${NEW_TOTAL} (초기 100,000 + 신규 1,000)"
 ```
 
@@ -826,14 +826,14 @@ from pyspark.sql import SparkSession
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-Migration-Verify") \
+        .appName("nexuspay-Migration-Verify") \
         .config("spark.jars.packages", "io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
 
-JDBC_URL = "jdbc:mysql://mysql:3306/paynex_legacy"
-JDBC_PROPS = {"user": "paynex", "password": "paynex1234", "driver": "com.mysql.cj.jdbc.Driver"}
+JDBC_URL = "jdbc:mysql://mysql:3306/nexuspay_legacy"
+JDBC_PROPS = {"user": "nexuspay", "password": "nexuspay1234", "driver": "com.mysql.cj.jdbc.Driver"}
 MIGRATION_ROOT = "/data/delta/migration"
 
 def verify_table(spark, table_name, pk_column):
@@ -934,7 +934,7 @@ EOF
     container_name: lab-kafka-connect
     environment:
       BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
-      GROUP_ID: paynex-connect
+      GROUP_ID: nexuspay-connect
       CONFIG_STORAGE_TOPIC: _connect-configs
       OFFSET_STORAGE_TOPIC: _connect-offsets
       STATUS_STORAGE_TOPIC: _connect-status
@@ -982,7 +982,7 @@ curl -s http://localhost:8084/connector-plugins | python3 -m json.tool | grep cl
 ```bash
 cat > config/debezium-mysql-connector.json << 'JSON'
 {
-  "name": "paynex-mysql-cdc",
+  "name": "nexuspay-mysql-cdc",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
     "tasks.max": "1",
@@ -991,11 +991,11 @@ cat > config/debezium-mysql-connector.json << 'JSON'
     "database.user": "debezium",
     "database.password": "debezium1234",
     "database.server.id": "100",
-    "topic.prefix": "paynex.cdc",
-    "database.include.list": "paynex_legacy",
-    "table.include.list": "paynex_legacy.settlements,paynex_legacy.transactions",
+    "topic.prefix": "nexuspay.cdc",
+    "database.include.list": "nexuspay_legacy",
+    "table.include.list": "nexuspay_legacy.settlements,nexuspay_legacy.transactions",
     "schema.history.internal.kafka.bootstrap.servers": "kafka-1:9092,kafka-2:9092,kafka-3:9092",
-    "schema.history.internal.kafka.topic": "_schema-history.paynex",
+    "schema.history.internal.kafka.topic": "_schema-history.nexuspay",
     "include.schema.changes": "true",
     "snapshot.mode": "initial",
     "decimal.handling.mode": "double",
@@ -1016,11 +1016,11 @@ curl -X POST http://localhost:8084/connectors \
   -d @config/debezium-mysql-connector.json | python3 -m json.tool
 
 # 커넥터 상태 확인
-curl -s http://localhost:8084/connectors/paynex-mysql-cdc/status | python3 -m json.tool
+curl -s http://localhost:8084/connectors/nexuspay-mysql-cdc/status | python3 -m json.tool
 ```
 
 > **Debezium 핵심 설정 해설**:
-> - `topic.prefix`: CDC 이벤트가 발행될 Kafka 토픽의 접두사 (예: `paynex.cdc.paynex_legacy.settlements`)
+> - `topic.prefix`: CDC 이벤트가 발행될 Kafka 토픽의 접두사 (예: `nexuspay.cdc.nexuspay_legacy.settlements`)
 > - `snapshot.mode: initial`: 최초 실행 시 기존 데이터 전체를 스냅샷으로 캡처
 > - `tombstones.on.delete`: DELETE 발생 시 tombstone 이벤트 생성 (다운스트림에서 삭제 감지 가능)
 > - `transforms.unwrap`: Debezium의 복잡한 이벤트 구조를 단순화 (before/after 엔벨로프 제거)
@@ -1031,12 +1031,12 @@ curl -s http://localhost:8084/connectors/paynex-mysql-cdc/status | python3 -m js
 ```bash
 # CDC 토픽 목록 확인
 docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server kafka-1:9092 --list | grep paynex.cdc
+  --bootstrap-server kafka-1:9092 --list | grep nexuspay.cdc
 
 # settlements 테이블 CDC 이벤트 확인 (스냅샷)
 docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka-1:9092 \
-  --topic paynex.cdc.paynex_legacy.settlements \
+  --topic nexuspay.cdc.nexuspay_legacy.settlements \
   --from-beginning \
   --max-messages 3 | python3 -m json.tool
 ```
@@ -1047,12 +1047,12 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
 # 터미널 1: CDC 이벤트 실시간 모니터링
 docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka-1:9092 \
-  --topic paynex.cdc.paynex_legacy.settlements \
+  --topic nexuspay.cdc.nexuspay_legacy.settlements \
   --property print.key=true \
   --property print.timestamp=true
 
 # 터미널 2: MySQL에서 실시간 변경 실행
-docker exec -it lab-mysql mysql -u paynex -ppaynex1234 paynex_legacy
+docker exec -it lab-mysql mysql -u nexuspay -pnexuspay1234 nexuspay_legacy
 
 # === INSERT: 새 정산 건 추가 ===
 INSERT INTO settlements (merchant_id, settlement_date, total_amount, fee_amount, net_amount, tx_count, status)
@@ -1090,7 +1090,7 @@ from pyspark.sql.types import StructType, StructField, StringType, LongType, Int
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-CDC-to-Delta") \
+        .appName("nexuspay-CDC-to-Delta") \
         .config("spark.jars.packages",
                 "io.delta:delta-spark_2.12:3.1.0,"
                 "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1") \
@@ -1119,7 +1119,7 @@ SETTLEMENT_SCHEMA = StructType([
     StructField("__table", StringType()),
 ])
 
-CDC_TOPIC = "paynex.cdc.paynex_legacy.settlements"
+CDC_TOPIC = "nexuspay.cdc.nexuspay_legacy.settlements"
 DELTA_PATH = "/data/delta/migration/settlements_cdc"
 
 def process_batch(batch_df, batch_id):
@@ -1214,7 +1214,7 @@ docker exec lab-spark-master spark-submit \
   /opt/spark-jobs/migration/cdc_to_delta.py
 
 # 터미널 2: MySQL에서 변경 발생 → Delta Lake 반영 확인
-docker exec lab-mysql mysql -u paynex -ppaynex1234 paynex_legacy << 'SQL'
+docker exec lab-mysql mysql -u nexuspay -pnexuspay1234 nexuspay_legacy << 'SQL'
 -- 정산 상태 대량 변경 (100건)
 UPDATE settlements
 SET status = 'COMPLETED', completed_at = NOW()
@@ -1256,7 +1256,7 @@ cat > docs/cdc-event-structure.md << 'EOF'
 {
   "before": { "settlement_id": 1, "status": "PENDING", ... },
   "after":  { "settlement_id": 1, "status": "COMPLETED", ... },
-  "source": { "db": "paynex_legacy", "table": "settlements", "ts_ms": 1711900000000 },
+  "source": { "db": "nexuspay_legacy", "table": "settlements", "ts_ms": 1711900000000 },
   "op": "u",
   "ts_ms": 1711900000100
 }
@@ -1270,7 +1270,7 @@ cat > docs/cdc-event-structure.md << 'EOF'
   ...
   "__op": "u",
   "__source_ts_ms": 1711900000000,
-  "__db": "paynex_legacy",
+  "__db": "nexuspay_legacy",
   "__table": "settlements"
 }
 ```
@@ -1309,8 +1309,8 @@ FAIL=0
 
 verify_count() {
     local table=$1
-    local src_count=$(docker exec lab-mysql mysql -u paynex -ppaynex1234 -N \
-      -e "SELECT COUNT(*) FROM paynex_legacy.${table}")
+    local src_count=$(docker exec lab-mysql mysql -u nexuspay -pnexuspay1234 -N \
+      -e "SELECT COUNT(*) FROM nexuspay_legacy.${table}")
     echo ""
     echo "[${table}]"
     echo "  MySQL (소스) : ${src_count} 건"
@@ -1326,7 +1326,7 @@ verify_count "settlements"
 
 echo ""
 echo "=== Debezium CDC 커넥터 상태 ==="
-CDC_STATUS=$(curl -s http://localhost:8084/connectors/paynex-mysql-cdc/status | python3 -c "
+CDC_STATUS=$(curl -s http://localhost:8084/connectors/nexuspay-mysql-cdc/status | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 print(f\"  커넥터: {d['connector']['state']}\")
@@ -1339,7 +1339,7 @@ echo ""
 echo "=== Kafka CDC 토픽 오프셋 ==="
 docker exec lab-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
   --bootstrap-server kafka-1:9092 \
-  --describe --group paynex-connect 2>/dev/null | head -20
+  --describe --group nexuspay-connect 2>/dev/null | head -20
 
 echo ""
 echo "============================================"
@@ -1355,7 +1355,7 @@ bash scripts/verify_migration_all.sh
 ```bash
 cat > docs/migration-strategy-guide.md << 'EOF'
 # 데이터 이관 전략 가이드
-## PayNex 레거시 DB → 데이터 레이크 이관 프로젝트 결과 보고서
+## Nexus Pay 레거시 DB → 데이터 레이크 이관 프로젝트 결과 보고서
 
 ---
 
@@ -1368,7 +1368,7 @@ cat > docs/migration-strategy-guide.md << 'EOF'
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│                  PayNex 데이터 이관 아키텍처                         │
+│                  Nexus Pay 데이터 이관 아키텍처                         │
 │                                                                   │
 │  ┌─────────────┐     배치 이관 (야간)     ┌──────────────────┐    │
 │  │             │  ─── Spark JDBC ────→   │                  │    │
@@ -1431,13 +1431,13 @@ EOF
 
 ```bash
 cat > docs/migration-architecture.md << 'EOF'
-# PayNex 데이터 파이프라인 아키텍처 — Week 6 완성
+# Nexus Pay 데이터 파이프라인 아키텍처 — Week 6 완성
 
 ## 전체 흐름
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                       PayNex 데이터 파이프라인 전체 아키텍처                     │
+│                       Nexus Pay 데이터 파이프라인 전체 아키텍처                     │
 │                                                                              │
 │  [레거시 시스템 — Week 6]                                                     │
 │  ┌─────────────┐                                                             │
@@ -1454,10 +1454,10 @@ cat > docs/migration-architecture.md << 'EOF'
 │  [버퍼 계층 — Week 2]                                                         │
 │  ┌─────────────────────────────────────┐                                     │
 │  │ Kafka (3-브로커 클러스터)              │                                    │
-│  │ ├── paynex.events.ingested (수집)    │                                    │
-│  │ ├── paynex.cdc.* (CDC 이벤트)        │                                    │
-│  │ ├── paynex.aggregation.* (집계 결과)  │                                    │
-│  │ └── paynex.alerts.fraud (이상거래)    │                                    │
+│  │ ├── nexuspay.events.ingested (수집)    │                                    │
+│  │ ├── nexuspay.cdc.* (CDC 이벤트)        │                                    │
+│  │ ├── nexuspay.aggregation.* (집계 결과)  │                                    │
+│  │ └── nexuspay.alerts.fraud (이상거래)    │                                    │
 │  └─────────────┬───────────────────────┘                                     │
 │                │                                                             │
 │        ┌───────┴───────┐                                                     │

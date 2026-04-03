@@ -10,7 +10,7 @@
 
 ### 배경 설정
 
-가상의 중견 핀테크 기업 **"페이넥스(PayNex)"** 가 데이터 파이프라인 현대화를 검토 중이다. 컨설턴트로서 PoC(Proof of Concept) 환경을 로컬에 구축하여 전체 Apache 오픈소스 스택이 정상적으로 작동하는지 검증해야 한다. 이 환경은 이후 8주간의 모든 실습의 기반이 된다.
+가상의 핀테크 서비스 **"Nexus Pay"** 는 안정적이고 확장 가능한 결제 플랫폼을 목표로 하는 MSA 기반 Payment Service다. 컨설턴트이자 데이터 파이프라인 담당 역할로서 PoC(Proof of Concept) 환경을 로컬에 구축하여 전체 Apache 오픈소스 스택이 정상적으로 작동하는지 검증해야 한다. 이 환경은 이후 8주간의 모든 실습의 기반이 된다.
 
 ### 목표
 
@@ -76,15 +76,21 @@ COMPOSE_PROJECT_NAME=pipeline-lab
 
 # === PostgreSQL ===
 POSTGRES_USER=pipeline
-POSTGRES_PASSWORD=pipeline1234
+POSTGRES_PASSWORD=pipeline
 POSTGRES_DB=pipeline_db
 
 # === Redis ===
-REDIS_PASSWORD=redis1234
+REDIS_PASSWORD=redis
+
+# === NiFi ===
+NIFI_USERNAME=admin
+NIFI_PASSWORD=nifi
 
 # === Airflow ===
+AIRFLOW_ADMIN_USERNAME=admin
+AIRFLOW_ADMIN_PASSWORD=airflow
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://pipeline:pipeline1234@postgres:5432/airflow_db
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://pipeline:pipeline@postgres:5432/airflow_db
 AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
 AIRFLOW__CORE__LOAD_EXAMPLES=false
 AIRFLOW__WEBSERVER__SECRET_KEY=airflow-secret-key-2026
@@ -200,17 +206,17 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db \
   -c "SELECT tx_type, count(*), round(avg(amount),0) AS avg_amt FROM transactions GROUP BY tx_type;"
 
 # Airflow DB 생성 확인
-docker exec lab-postgres psql -U pipeline -c "\l" | grep airflow_db
+docker exec lab-postgres psql -U pipeline -d pipeline_db -c "\l" | grep airflow_db
 
 # Redis 검증
-docker exec lab-redis redis-cli -a redis1234 ping
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping
 # 기대 결과: PONG
 
-docker exec lab-redis redis-cli -a redis1234 SET test:hello "pipeline-lab"
-docker exec lab-redis redis-cli -a redis1234 GET test:hello
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli SET test:hello "pipeline-lab"
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli GET test:hello
 # 기대 결과: "pipeline-lab"
 
-docker exec lab-redis redis-cli -a redis1234 DEL test:hello
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli DEL test:hello
 ```
 
 **Day 1 완료 기준**: PostgreSQL에 transactions 테이블 100건 확인, Redis PING/PONG 정상.
@@ -266,14 +272,14 @@ docker-compose.yml의 services 섹션에 추가:
     container_name: lab-nifi
     environment:
       NIFI_WEB_HTTP_PORT: 8080
-      SINGLE_USER_CREDENTIALS_USERNAME: admin
-      SINGLE_USER_CREDENTIALS_PASSWORD: nifi1234admin
+      SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
     ports:
       - "8080:8080"
     networks:
       - pipeline-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/nifi/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://$${HOSTNAME}:8080/nifi/ || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 15
@@ -286,35 +292,38 @@ docker-compose.yml의 services 섹션에 추가:
 # 기동
 docker compose up -d kafka
 
+# Git Bash 사용 시 `/opt/...` 경로가 Windows 경로로 잘못 변환될 수 있으므로
+# Kafka CLI는 `docker exec ... sh -c '...'` 형태로 실행한다.
+
 # 토픽 생성
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --topic test-transactions \
   --partitions 3 \
-  --replication-factor 1
+  --replication-factor 1'
 
 # 토픽 목록 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list'
 # 기대 결과: test-transactions
 
 # 토픽 상세 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --describe --topic test-transactions
+  --describe --topic test-transactions'
 
 # 메시지 프로듀스 테스트
 echo '{"tx_id":1,"user_id":42,"amount":150000,"type":"PAYMENT"}' | \
-docker exec -i lab-kafka /opt/kafka/bin/kafka-console-producer.sh \
+docker exec -i lab-kafka sh -c '/opt/kafka/bin/kafka-console-producer.sh \
   --bootstrap-server localhost:9092 \
-  --topic test-transactions
+  --topic test-transactions'
 
 # 메시지 컨슈머 테스트
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic test-transactions \
   --from-beginning \
-  --max-messages 1
+  --max-messages 1'
 # 기대 결과: {"tx_id":1,"user_id":42,"amount":150000,"type":"PAYMENT"}
 ```
 
@@ -331,14 +340,18 @@ docker logs -f lab-nifi 2>&1 | grep -i "started"
 curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
 
-브라우저에서 `http://localhost:8080/nifi/` 접속하여 로그인 (admin / nifi1234admin).
+브라우저에서 `http://localhost:8080/nifi/` 접속한다. 최초 접속 시 로그인 화면이 나타나면 `admin / nifi`로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
 
 **NiFi 기본 검증 플로우 생성 (UI에서 수행)**:
 
-1. GenerateFlowFile 프로세서 추가 — 테스트 데이터 자동 생성
-2. LogAttribute 프로세서 추가 — 데이터 속성 로깅
-3. 두 프로세서를 Connection으로 연결
-4. 시작 후 LogAttribute에서 FlowFile 수신 확인
+1. `GenerateFlowFile` 프로세서 추가 — 테스트용 FlowFile 자동 생성
+2. `LogAttribute` 프로세서 추가 — FlowFile 속성 로그 기록
+3. `GenerateFlowFile`의 `success` relationship을 `LogAttribute`에 Connection으로 연결
+4. `LogAttribute` 설정의 `Relationships` 탭에서 `success -> terminate`를 체크하여 최종 출력 relationship을 자동 종료로 설정
+5. 두 프로세서를 시작하고 Connection 큐가 `0 (0 bytes)`로 유지되는지 확인
+6. `LogAttribute`의 `In` 값이 증가하는지 확인하여 FlowFile 수신을 검증
+
+> 참고: `LogAttribute`의 `success`가 어디에도 연결되지 않았고 `terminate`도 체크되지 않으면 `Relationship success is invalid...` 경고와 함께 프로세서를 시작할 수 없다.
 
 **Day 2 완료 기준**: Kafka 토픽 생성·메시지 송수신 확인, NiFi 웹 UI 접속 및 기본 플로우 작동.
 
@@ -394,11 +407,17 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   # Spark — 배치 처리
   # ──────────────────────────────────────
   spark-master:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: lab-spark-master
-    environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
     ports:
       - "8082:8080"
       - "7077:7077"
@@ -415,13 +434,18 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
       retries: 10
 
   spark-worker:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: lab-spark-worker
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --cores
+      - "2"
+      - --memory
+      - 2g
+      - --webui-port
+      - "8081"
     depends_on:
       spark-master:
         condition: service_healthy
@@ -433,6 +457,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
       - pipeline-net
 ```
 
+> 참고: Spark는 `bitnami/spark` 대신 공식 이미지 `apache/spark:3.5.1` 기준으로 구성하며, `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
+
 ### 3-3. Airflow 서비스 추가
 
 ```yaml
@@ -443,17 +469,11 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-init
     entrypoint: >
-      bash -c "
-        airflow db init &&
-        airflow users create \
-          --username admin \
-          --password admin1234 \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@pipeline-lab.local
-      "
+      bash -c "airflow db migrate &&
+      airflow users create --username ${AIRFLOW_ADMIN_USERNAME} --password ${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname User --role Admin --email admin@pipeline-lab.local"
     environment:
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     depends_on:
@@ -465,6 +485,7 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   airflow-webserver:
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-web
+    restart: unless-stopped
     command: airflow webserver --port 8083
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
@@ -492,6 +513,7 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
   airflow-scheduler:
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-sched
+    restart: unless-stopped
     command: airflow scheduler
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
@@ -508,6 +530,8 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
 ```
 
 ### 3-4. 샘플 Airflow DAG — 환경 검증용
+
+Airflow가 PostgreSQL, Redis, Kafka, Flink에 실제로 연결 가능한지 확인하는 수동 실행용 DAG를 추가한다.
 
 ```python
 # dags/healthcheck_dag.py
@@ -533,17 +557,17 @@ with DAG(
 
     check_postgres = BashOperator(
         task_id="check_postgres",
-        bash_command='python -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline1234\'); print(\'PostgreSQL OK\')"',
+        bash_command='python -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline\'); print(\'PostgreSQL OK\')"',
     )
 
     check_redis = BashOperator(
         task_id="check_redis",
-        bash_command='python -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis1234\'); print(r.ping())"',
+        bash_command='python -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis\'); print(r.ping())"',
     )
 
     check_kafka = BashOperator(
         task_id="check_kafka",
-        bash_command='python3 -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
+        bash_command='python -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
     )
 
     check_flink = BashOperator(
@@ -559,6 +583,67 @@ with DAG(
     [check_postgres, check_redis, check_kafka, check_flink] >> report
 ```
 
+파일 생성 후 Airflow가 DAG를 인식하는지 확인한다.
+
+```bash
+# Git Bash 사용 시 `/opt/...` 경로가 Windows 경로로 잘못 변환될 수 있으므로
+# 컨테이너 내부 절대경로는 `sh -lc '...'` 형태로 감싸서 실행한다.
+
+# Airflow 컨테이너에서 DAG 파일 확인
+docker exec lab-airflow-web sh -lc "ls -l /opt/airflow/dags"
+
+# DAG 목록에서 environment_healthcheck 확인
+docker exec lab-airflow-web airflow dags list | grep environment_healthcheck
+```
+
+기대 결과:
+- `/opt/airflow/dags/healthcheck_dag.py` 파일이 보인다
+- `airflow dags list` 출력에 `environment_healthcheck`가 포함된다
+
+수동 실행 검증은 UI 또는 CLI 중 편한 방법으로 진행한다.
+
+```bash
+# 방법 1: CLI로 DAG 수동 실행
+docker exec lab-airflow-web airflow dags trigger environment_healthcheck
+
+# 실행 상태 확인
+docker exec lab-airflow-web airflow dags list-runs -d environment_healthcheck
+
+# 태스크 인스턴스 상태 확인
+docker exec lab-airflow-web airflow tasks states-for-dag-run environment_healthcheck <dag_run_id>
+```
+
+`<dag_run_id>`는 `list-runs`에서 확인한 값으로 바꿔 넣는다. 모든 태스크가 `success`이면 검증 통과다.
+
+브라우저에서 확인하려면 아래 순서로 진행한다.
+
+```text
+1. http://localhost:8083 접속
+2. admin / airflow 로그인
+3. environment_healthcheck DAG 활성화
+4. Trigger DAG 클릭
+5. Graph 또는 Grid 화면에서 check_postgres, check_redis, check_kafka, check_flink, generate_report가 모두 success인지 확인
+```
+
+실행 로그까지 확인하려면 다음 명령을 사용한다.
+
+```bash
+# 최근 DAG 실행 로그 확인
+docker exec lab-airflow-sched airflow dags list-runs -d environment_healthcheck
+
+# 스케줄러 로그에서 task 실행 흔적 확인
+docker compose logs airflow-scheduler --tail 200
+```
+
+기대 결과:
+- `check_postgres`: `PostgreSQL OK`
+- `check_redis`: `True`
+- `check_kafka`: `Kafka brokers: 1`
+- `check_flink`: Flink overview JSON 출력 후 `Flink OK`
+- `generate_report`: 완료 시각 출력
+
+검증이 끝나면 Day 3 완료 기준에 Airflow 연결성 검증까지 포함된 것으로 본다.
+
 ### 3-5. 컴포넌트별 기동 및 검증
 
 ```bash
@@ -566,8 +651,8 @@ with DAG(
 docker compose up -d flink-jobmanager flink-taskmanager
 
 # Flink 대시보드 확인
-curl -sf http://localhost:8081/overview | python3 -m json.tool
-# 기대: taskmanagers: 1, slots-total: 4
+curl -sf http://localhost:8081/overview
+# 기대: JSON 응답에 "taskmanagers":1, "slots-total":4 포함
 
 # Spark 기동
 docker compose up -d spark-master spark-worker
@@ -580,8 +665,8 @@ docker compose up -d airflow-init
 docker compose up -d airflow-webserver airflow-scheduler
 
 # Airflow 웹 UI 확인
-curl -sf http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = healthy, scheduler.status = healthy
+curl -sf http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"healthy"}, "scheduler":{"status":"healthy"} 포함
 ```
 
 **웹 UI 접속 정보**:
@@ -590,7 +675,7 @@ curl -sf http://localhost:8083/health | python3 -m json.tool
 |--------|-----|------|
 | Flink Dashboard | http://localhost:8081 | (인증 없음) |
 | Spark Master | http://localhost:8082 | (인증 없음) |
-| Airflow | http://localhost:8083 | admin / admin1234 |
+| Airflow | http://localhost:8083 | admin / airflow |
 
 **Day 3 완료 기준**: Flink 대시보드에서 TaskManager 1개·슬롯 4개 확인, Spark Master에 Worker 1개 등록 확인, Airflow 웹 UI 로그인 성공.
 
@@ -650,11 +735,11 @@ check() {
 
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
-check "Redis" "docker exec lab-redis redis-cli -a redis1234 ping"
+check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
 
 echo ""
 echo "[메시징·수집]"
-check "Kafka" "docker exec ${KAFKA_CONTAINER} /opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list"
+check "Kafka" "docker exec ${KAFKA_CONTAINER} sh -c '/opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list'"
 check "NiFi" "curl -sf http://localhost:8080/nifi/"
 
 echo ""
@@ -704,30 +789,30 @@ bash scripts/healthcheck-all.sh
 
 파이프라인 토픽을 만들고, 샘플 거래 데이터를 프로듀싱한 뒤, 컨슈머로 확인한다.
 
-> **참고**: 아래 `paynex-transactions` 토픽은 연동 검증 목적의 **임시 토픽**이다. Week 2에서 정식 명명 규칙(`<도메인>.<엔티티>.<이벤트유형>`, 점 구분자)에 따라 `paynex.transactions.payment` 등으로 재생성하며, 이 토픽은 삭제할 예정이다.
+> **참고**: 아래 `nexuspay-transactions` 토픽은 연동 검증 목적의 **임시 토픽**이다. Week 2에서 정식 명명 규칙(`<도메인>.<엔티티>.<이벤트유형>`, 점 구분자)에 따라 `nexuspay.transactions.payment` 등으로 재생성하며, 이 토픽은 삭제할 예정이다.
 
 ```bash
 # 실습용 임시 토픽 생성 (Week 2에서 정식 토픽으로 교체 예정)
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --create --topic paynex-transactions \
+  --create --topic nexuspay-transactions \
   --partitions 3 \
-  --replication-factor 1
+  --replication-factor 1'
 
 # 샘플 거래 데이터 10건 프로듀스
 for i in $(seq 1 10); do
   echo "{\"tx_id\":$i,\"user_id\":$((RANDOM % 1000)),\"amount\":$((RANDOM % 5000000 + 10000)),\"type\":\"PAYMENT\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" | \
-  docker exec -i lab-kafka /opt/kafka/bin/kafka-console-producer.sh \
+  docker exec -i lab-kafka sh -c '/opt/kafka/bin/kafka-console-producer.sh \
     --bootstrap-server localhost:9092 \
-    --topic paynex-transactions
+    --topic nexuspay-transactions'
 done
 
 # 컨슈머로 수신 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic paynex-transactions \
+  --topic nexuspay-transactions \
   --from-beginning \
-  --max-messages 10
+  --max-messages 10'
 ```
 
 ### 4-4. 연동 검증 실습 — PostgreSQL → Redis 피처 캐싱 시뮬레이션
@@ -739,8 +824,8 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db -t -A -F'|' \
       FROM transactions GROUP BY user_id ORDER BY tx_count DESC LIMIT 5;"
 
 # 결과를 Redis에 피처로 저장하는 시뮬레이션
-docker exec lab-redis redis-cli -a redis1234 HSET user:features:42 tx_count 15 avg_amount 3500000
-docker exec lab-redis redis-cli -a redis1234 HGETALL user:features:42
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli HSET user:features:42 tx_count 15 avg_amount 3500000
+docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli HGETALL user:features:42
 # 기대: tx_count 15 avg_amount 3500000
 ```
 
@@ -765,9 +850,9 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
 ```bash
 # 현재 토픽 상태 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --describe --topic paynex-transactions
+  --describe --topic nexuspay-transactions'
 
 # Kafka 컨테이너 강제 중단
 docker stop lab-kafka
@@ -780,15 +865,15 @@ docker start lab-kafka
 
 # 30초 대기 후 복구 확인
 sleep 30
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list'
 
 # 기존 메시지 보존 확인
-docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic paynex-transactions \
+  --topic nexuspay-transactions \
   --from-beginning \
-  --max-messages 10
+  --max-messages 10'
 # 기대: 이전에 프로듀스한 10건 그대로 존재
 ```
 
@@ -799,16 +884,18 @@ docker exec lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
 docker stop lab-postgres
 
 # Airflow 상태 확인 (DB 연결 실패)
-curl -s http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = unhealthy
+curl -s http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"unhealthy"} 포함
 
 # PostgreSQL 재기동
 docker start lab-postgres
 
 # 30초 대기 후 Airflow 복구 확인
+# restart 정책이 있으면 scheduler/webserver가 DB 복구 후 자동 재시작될 수 있다.
 sleep 30
-curl -s http://localhost:8083/health | python3 -m json.tool
-# 기대: metadatabase.status = healthy
+curl -s http://localhost:8083/health
+# 기대: JSON 응답에 "metadatabase":{"status":"healthy"} 포함
+# 기대: scheduler.status 도 healthy 로 복구
 ```
 
 **시나리오 C: Flink TaskManager 장애 및 복구**
@@ -818,67 +905,53 @@ curl -s http://localhost:8083/health | python3 -m json.tool
 docker stop lab-flink-tm
 
 # JobManager 대시보드에서 Available Task Slots = 0 확인
-curl -s http://localhost:8081/overview | python3 -m json.tool
+curl -s http://localhost:8081/overview
 
 # TaskManager 재기동
 docker start lab-flink-tm
 
 # 슬롯 복구 확인
 sleep 15
-curl -s http://localhost:8081/overview | python3 -m json.tool
-# 기대: taskmanagers: 1, slots-available: 4
+curl -s http://localhost:8081/overview
+# 기대: JSON 응답에 "taskmanagers":1, "slots-available":4 포함
 ```
 
-### 5-2. 장애 테스트 결과 기록 템플릿
+### 5-2. 장애 테스트 결과 기록
+
+현재 실습에서 실제로 확인한 결과는 아래와 같다.
 
 ```markdown
 ## 장애 테스트 결과
 
 | 시나리오 | 중단 대상 | 영향 범위 | 복구 소요 시간 | 데이터 손실 여부 | 비고 |
 |----------|----------|----------|-------------|---------------|------|
-| A | Kafka | 프로듀서/컨슈머 일시 중단 | ~30초 | 없음 (로그 보존) | |
-| B | PostgreSQL | Airflow 메타DB 연결 실패 | ~30초 | 없음 (볼륨 유지) | |
-| C | Flink TM | 스트림 처리 중단 | ~15초 | 작업 재시작 필요 | |
+| A | Kafka | Kafka 토픽 조회 및 프로듀스/컨슈머 테스트 일시 중단, 타 서비스는 계속 실행 | 약 30초 | 없음 | `nexuspay-transactions` 토픽과 기존 메시지 10건 재조회 성공 |
+| B | PostgreSQL | Airflow health endpoint 비정상 전환, metadatabase/scheduler 상태 unhealthy 확인 | 약 30초 | 없음 | PostgreSQL 재기동 후 `scheduler.status=healthy`까지 복구 확인 |
+| C | Flink TaskManager | Flink 슬롯 4개 모두 소실, JobManager overview에서 `taskmanagers=0` 확인 | 약 15초 | 없음 | TaskManager 재기동 후 `taskmanagers=1`, `slots-available=4` 복구 확인 |
 ```
+
+장애 테스트 해석:
+- Kafka는 단일 브로커 실습 환경에서도 재기동 후 토픽과 메시지가 유지되었다.
+- PostgreSQL은 Airflow의 핵심 의존성으로, 장애 시 Airflow health가 즉시 비정상으로 전환되었다.
+- Flink는 TaskManager 장애 시 처리 슬롯이 사라지고, 재기동 후 슬롯이 정상 복구되었다.
 
 ### 5-3. 환경 문서화 — README.md 작성
 
-```markdown
-# Pipeline Lab — 데이터 파이프라인 실습 환경
+Week 1 기준 환경 문서는 저장소 루트의 [README.md](/c:/Users/roadseeker/study/study-data-pipeline/README.md)에 정리한다. README에는 최소한 아래 내용을 포함한다.
 
-## 아키텍처 개요
+- 아키텍처 개요: `수집(Kafka·NiFi) → 변환(Flink·Spark) → 저장(PostgreSQL·Redis) → 오케스트레이션(Airflow)`
+- 서비스 구성: 컨테이너명, 포트, 역할
+- 빠른 시작: `docker compose up -d`, `bash scripts/healthcheck-all.sh`
+- 접속 정보: NiFi, Flink, Spark, Airflow URL 및 계정
+- 프로젝트 구조: `dags/`, `docs/`, `scripts/`, `spark-etl/`, `spark-jobs/`, `flink-jobs/`, `data/`
+- 종료 및 초기화: `docker compose down`, `docker compose down -v`
 
-수집(Kafka·NiFi) → 변환(Flink·Spark) → 저장(PostgreSQL·Redis) → 오케스트레이션(Airflow)
-
-## 서비스 구성
-
-| 서비스 | 컨테이너 | 포트 | 용도 |
-|--------|---------|------|------|
-| PostgreSQL 16 | lab-postgres | 5432 | 메타데이터·샘플 DB |
-| Redis 7 | lab-redis | 6379 | 피처 스토어·캐시 |
-| Kafka 3.7 (KRaft) | lab-kafka | 29092 | 실시간 메시징 |
-| NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
-| Flink 1.18 | lab-flink-jm/tm | 8081 | 실시간 스트림 처리 |
-| Spark 3.5 | lab-spark-master | 8082 | 배치 처리 |
-| Airflow 2.8 | lab-airflow-web | 8083 | 워크플로우 오케스트레이션 |
-
-## 빠른 시작
-
-docker compose up -d
-bash scripts/healthcheck-all.sh
-
-## 접속 정보
-
-- NiFi: http://localhost:8080/nifi (admin / nifi1234admin)
-- Flink: http://localhost:8081
-- Spark: http://localhost:8082
-- Airflow: http://localhost:8083 (admin / admin1234)
-
-## 종료 및 정리
-
-docker compose down        # 컨테이너 중단 (데이터 보존)
-docker compose down -v     # 컨테이너 + 볼륨 삭제 (초기화)
-```
+현재 README 반영 상태:
+- 전체 스택 아키텍처 개요 정리 완료
+- 서비스 구성 및 포트 문서화 완료
+- 빠른 시작/접속 정보 정리 완료
+- 프로젝트 구조 설명 포함
+- 종료 및 정리 명령 포함
 
 ### 5-4. 최종 정리 및 Week 2 준비
 
@@ -886,22 +959,18 @@ docker compose down -v     # 컨테이너 + 볼륨 삭제 (초기화)
 # 전체 환경 최종 검증
 bash scripts/healthcheck-all.sh
 
-# Week 2 준비: 연동 테스트용 토픽 생성 (Week 2에서 정식 명명규칙에 따라 재생성 예정)
-docker exec lab-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --create --topic test.connectivity-check \
-  --partitions 3 \
-  --replication-factor 1
-
-# Git 초기화 및 커밋
-cd pipeline-lab
-git init
-echo "postgres-data/\nredis-data/" > .gitignore
-git add .
-git commit -m "Week 1: 전체 스택 환경 구성 완료 — 7개 컴포넌트 Docker Compose"
+# Week 2 준비: Kafka 토픽 검증 상태 확인
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list'
 ```
 
-**Day 5 완료 기준**: 장애 시나리오 3건 테스트 완료, README.md 작성, Git 첫 커밋.
+Week 2 준비 포인트:
+- `nexuspay-transactions` 토픽이 정상 동작하는지 이미 확인했다.
+- Week 2에서는 이 토픽을 임시 검증용 자산으로 보고, 정식 명명 규칙 기반 토픽(`nexuspay.transactions.payment` 등)으로 재구성할 준비를 한다.
+- Git Bash 사용 시 `docker exec ... sh -c '...'` 패턴을 유지한다.
+- `.sh` 파일 줄바꿈 오류 재발 방지를 위해 저장소 루트에 `.gitattributes`를 추가했다.
+
+**Day 5 완료 기준**: 장애 시나리오 3건 테스트 완료, README.md 정리 완료, Week 2 진행 준비 완료.
 
 ---
 
@@ -909,14 +978,14 @@ git commit -m "Week 1: 전체 스택 환경 구성 완료 — 7개 컴포넌트 
 
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docker-compose.yml (7개 서비스 정의) | ☐ |
-| 2 | .env 환경 변수 파일 | ☐ |
-| 3 | scripts/init-db.sql (PostgreSQL 초기화) | ☐ |
-| 4 | scripts/healthcheck-all.sh (통합 헬스체크) | ☐ |
-| 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☐ |
-| 6 | 장애 테스트 결과 기록 | ☐ |
-| 7 | README.md (환경 문서) | ☐ |
-| 8 | Git 초기 커밋 | ☐ |
+| 1 | docker-compose.yml (7개 서비스 정의) | ☑ |
+| 2 | .env 환경 변수 파일 | ☑ |
+| 3 | scripts/init-db.sql (PostgreSQL 초기화) | ☑ |
+| 4 | scripts/healthcheck-all.sh (통합 헬스체크) | ☑ |
+| 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☑ |
+| 6 | 장애 테스트 결과 기록 | ☑ |
+| 7 | README.md (환경 문서) | ☑ |
+| 8 | Git 초기 커밋 | ☑ |
 
 ## 포트 맵 요약
 
@@ -932,4 +1001,4 @@ git commit -m "Week 1: 전체 스택 환경 구성 완료 — 7개 컴포넌트 
 
 ## Week 2 예고
 
-Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `paynex-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
+Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `nexuspay-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.

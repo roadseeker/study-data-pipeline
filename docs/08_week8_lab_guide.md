@@ -11,7 +11,7 @@
 
 ### 배경 설정
 
-Week 7까지 페이넥스(PayNex)의 데이터 파이프라인은 계층별로 완성되었다.
+Week 7까지 Nexus Pay의 데이터 파이프라인은 계층별로 완성되었다.
 
 - Week 1: Kafka·NiFi·Flink·Spark·Airflow·Redis·PostgreSQL 실습 환경 구성
 - Week 2: Kafka 토픽 설계, 파티션 전략, 컨슈머 그룹, 복제 설정
@@ -21,7 +21,7 @@ Week 7까지 페이넥스(PayNex)의 데이터 파이프라인은 계층별로 �
 - Week 6: Spark JDBC 배치 이관 + Debezium CDC 실시간 이관
 - Week 7: Airflow 기반 DAG 오케스트레이션, SLA, 백필, 장애 복구
 
-이제 페이넥스 CTO와 COO가 마지막 요구사항을 제시한다.
+이제 Nexus Pay CTO와 COO가 마지막 요구사항을 제시한다.
 
 > "각 기술이 따로 동작하는 건 확인했습니다. 하지만 고객에게 제안하려면 **하나의 운영 시나리오로 끝까지 연결된다는 증거**가 필요합니다. 결제 API와 정산 CSV, 레거시 MySQL 변경 데이터가 들어오면, Kafka와 NiFi를 거쳐 Flink·Spark·Delta Lake·Airflow가 **운영 환경처럼 유기적으로 연결**되어야 합니다."
 >
@@ -88,10 +88,10 @@ Week 8에서는 "잘 돌아가는 것 같다" 수준이 아니라, 무엇이 성
 | 구간 | 입력 | 처리 | 성공 기준 |
 |------|------|------|----------|
 | 수집 | API JSON / CSV / PostgreSQL / MySQL 변경분 | NiFi, Kafka Connect | 모든 소스가 Kafka 또는 Delta Lake로 유입 |
-| 실시간 처리 | `paynex.events.ingested` | Flink | 5분 집계 생성, 이상거래 알림 생성, 체크포인트 정상 |
+| 실시간 처리 | `nexuspay.events.ingested` | Flink | 5분 집계 생성, 이상거래 알림 생성, 체크포인트 정상 |
 | 배치 처리 | Bronze / CDC Delta | Spark | Silver·Gold 테이블 생성, 데이터 품질 규칙 통과 |
 | 이관 | MySQL 마스터/거래/정산 | Spark JDBC, Debezium | Full/Incremental/CDC 경로별 정합성 확보 |
-| 오케스트레이션 | Airflow DAG | Acceptance DAG + Master DAG 순차 실행 | `paynex_acceptance_rehearsal_dag` 성공 및 `master -> migration -> etl` 완료 |
+| 오케스트레이션 | Airflow DAG | Acceptance DAG + Master DAG 순차 실행 | `nexuspay_acceptance_rehearsal_dag` 성공 및 `master -> migration -> etl` 완료 |
 | 운영 | 장애·백필 | Airflow, Runbook | 장애 탐지, 복구, 특정 날짜 재처리 가능 |
 
 ### 1-2. 통합 프로젝트 구조
@@ -120,7 +120,7 @@ mkdir -p spark-etl/jobs
 │       ├── run_failure_drills.sh
 │       └── collect_pipeline_snapshot.sh
 ├── dags/
-│   └── paynex_acceptance_rehearsal_dag.py
+│   └── nexuspay_acceptance_rehearsal_dag.py
 ├── spark-etl/
 │   └── jobs/
 │       └── build_pipeline_kpis.py
@@ -128,7 +128,7 @@ mkdir -p spark-etl/jobs
     └── final/
         ├── acceptance-criteria.md
         ├── failure-drill-report.md
-        ├── paynex-final-architecture.md
+        ├── nexuspay-final-architecture.md
         ├── acceptance-test-report.md
         └── portfolio-demo-script.md
 ```
@@ -159,18 +159,18 @@ sources:
 
 expectations:
   kafka_topics:
-    paynex.events.ingested_min: 120
-    paynex.alerts.fraud_min: 1
+    nexuspay.events.ingested_min: 120
+    nexuspay.alerts.fraud_min: 1
   delta_tables:
     bronze_transactions_min: 120
     silver_transactions_min: 120
     gold_daily_summary_min: 1
   airflow:
     required_dags:
-      - paynex_daily_master
-      - paynex_daily_etl
-      - paynex_daily_migration
-      - paynex_acceptance_rehearsal_dag
+      - nexuspay_daily_master
+      - nexuspay_daily_etl
+      - nexuspay_daily_migration
+      - nexuspay_acceptance_rehearsal_dag
 ```
 
 ### 1-4. 성공 기준 문서 작성
@@ -225,7 +225,7 @@ Week 8에서는 Acceptance DAG가 `scripts/e2e` 아래의 셸 스크립트를 �
 bash scripts/healthcheck-all.sh
 
 # Airflow DAG 목록 확인
-docker exec lab-airflow-web airflow dags list | grep paynex
+docker exec lab-airflow-web airflow dags list | grep nexuspay
 
 # Kafka 토픽 목록 확인
 docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --list
@@ -259,13 +259,13 @@ echo "[2/5] 정산 CSV 파일 생성"
 python3 scripts/csv_settlement_generator.py -n 2 -r 40 -i 5
 
 echo "[3/5] Kafka 거래 이벤트 생성"
-python3 scripts/producer_paynex.py -n 200 --delay 0.02
+python3 scripts/producer_nexuspay.py -n 200 --delay 0.02
 
 echo "[4/5] MySQL CDC 변경 반영"
-docker exec -i lab-mysql mysql -u paynex -ppaynex1234 paynex_legacy < scripts/e2e/mysql_cdc_changes.sql
+docker exec -i lab-mysql mysql -u nexuspay -pnexuspay1234 nexuspay_legacy < scripts/e2e/mysql_cdc_changes.sql
 
 echo "[5/5] Airflow 통합 DAG 실행"
-docker exec lab-airflow-web airflow dags trigger paynex_acceptance_rehearsal_dag \
+docker exec lab-airflow-web airflow dags trigger nexuspay_acceptance_rehearsal_dag \
   --logical-date "${TARGET_DATE}T00:00:00" \
   --conf "{\"target_date\":\"${TARGET_DATE}\"}"
 
@@ -299,10 +299,10 @@ WHERE settlement_id = 1003;
 
 ### 2-3. 통합 리허설 DAG 작성
 
-Week 7의 마스터 DAG를 재사용하되, Week 8에서는 최종 검증 태스크를 추가한다. Acceptance DAG는 수동 실행만 허용하고, 내부에서 `paynex_daily_master`를 호출해 `migration -> etl` 순서를 그대로 재사용한다.
+Week 7의 마스터 DAG를 재사용하되, Week 8에서는 최종 검증 태스크를 추가한다. Acceptance DAG는 수동 실행만 허용하고, 내부에서 `nexuspay_daily_master`를 호출해 `migration -> etl` 순서를 그대로 재사용한다.
 
 ```python
-# dags/paynex_acceptance_rehearsal_dag.py
+# dags/nexuspay_acceptance_rehearsal_dag.py
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -312,13 +312,13 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
 default_args = {
-    "owner": "paynex",
+    "owner": "Nexus Pay",
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
 
 with DAG(
-    dag_id="paynex_acceptance_rehearsal_dag",
+    dag_id="nexuspay_acceptance_rehearsal_dag",
     start_date=datetime(2026, 4, 1),
     schedule=None,
     catchup=False,
@@ -329,7 +329,7 @@ with DAG(
 
     trigger_master = TriggerDagRunOperator(
         task_id="trigger_master_dag",
-        trigger_dag_id="paynex_daily_master",
+        trigger_dag_id="nexuspay_daily_master",
         logical_date="{{ dag_run.conf.get('target_date') if dag_run and dag_run.conf else ds }}",
         conf={"target_date": "{{ dag_run.conf.get('target_date') if dag_run and dag_run.conf else ds }}"},
         wait_for_completion=True,
@@ -366,7 +366,7 @@ with DAG(
 
 ```bash
 docker exec lab-airflow-web airflow dags list | grep acceptance
-docker exec lab-airflow-web airflow dags show paynex_acceptance_rehearsal_dag
+docker exec lab-airflow-web airflow dags show nexuspay_acceptance_rehearsal_dag
 ```
 
 ---
@@ -385,13 +385,13 @@ set -euo pipefail
 TARGET_DATE="${1:-2026-04-01}"
 
 echo "=== 1. Kafka 토픽 데이터 확인 ==="
-docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic paynex.events.ingested
-docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic paynex.alerts.fraud
+docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic nexuspay.events.ingested
+docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic nexuspay.alerts.fraud
 
 echo "=== 2. Airflow DAG 실행 상태 확인 ==="
-docker exec lab-airflow-web airflow dags state paynex_daily_master "${TARGET_DATE}"
-docker exec lab-airflow-web airflow dags state paynex_daily_migration "${TARGET_DATE}"
-docker exec lab-airflow-web airflow dags state paynex_daily_etl "${TARGET_DATE}"
+docker exec lab-airflow-web airflow dags state nexuspay_daily_master "${TARGET_DATE}"
+docker exec lab-airflow-web airflow dags state nexuspay_daily_migration "${TARGET_DATE}"
+docker exec lab-airflow-web airflow dags state nexuspay_daily_etl "${TARGET_DATE}"
 
 echo "=== 3. Delta Lake 결과 검증 ==="
 docker exec -w /opt/spark-etl lab-spark-master spark-submit \
@@ -402,7 +402,7 @@ echo "=== 4. Flink 잡 상태 확인 ==="
 curl -s http://localhost:8081/jobs/overview
 
 echo "=== 5. CDC 커넥터 상태 확인 ==="
-curl -s http://localhost:8084/connectors/paynex-mysql-cdc/status
+curl -s http://localhost:8084/connectors/nexuspay-mysql-cdc/status
 ```
 
 ### 3-2. KPI 요약 잡 작성
@@ -461,8 +461,8 @@ mkdir -p "${OUT_DIR}"
 
 docker compose ps > "${OUT_DIR}/docker-compose-ps.txt"
 curl -s http://localhost:8081/jobs/overview > "${OUT_DIR}/flink-jobs.json"
-curl -s http://localhost:8084/connectors/paynex-mysql-cdc/status > "${OUT_DIR}/cdc-status.json"
-docker exec lab-airflow-web airflow dags list-runs -d paynex_acceptance_rehearsal_dag > "${OUT_DIR}/airflow-acceptance.txt"
+curl -s http://localhost:8084/connectors/nexuspay-mysql-cdc/status > "${OUT_DIR}/cdc-status.json"
+docker exec lab-airflow-web airflow dags list-runs -d nexuspay_acceptance_rehearsal_dag > "${OUT_DIR}/airflow-acceptance.txt"
 
 echo "[done] pipeline snapshot saved to ${OUT_DIR}"
 ```
@@ -474,7 +474,7 @@ echo "[done] pipeline snapshot saved to ${OUT_DIR}"
 bash scripts/e2e/run_business_day_rehearsal.sh 2026-04-01
 
 # 2. Acceptance DAG 상태 확인
-docker exec lab-airflow-web airflow dags list-runs -d paynex_acceptance_rehearsal_dag
+docker exec lab-airflow-web airflow dags list-runs -d nexuspay_acceptance_rehearsal_dag
 
 # 3. End-to-End 검증
 bash scripts/e2e/verify_end_to_end.sh 2026-04-01
@@ -486,7 +486,7 @@ bash scripts/e2e/verify_end_to_end.sh 2026-04-01
 |-----------|----------|----------|
 | API/CSV/DB 입력 유입 | NiFi 큐, Kafka 토픽 확인 | 다중 소스 이벤트가 Kafka로 유입 |
 | Flink 집계 | 결과 토픽 / 로그 | 5분 집계 정상 생성 |
-| 이상거래 탐지 | `paynex.alerts.fraud` | 최소 1건 이상 탐지 |
+| 이상거래 탐지 | `nexuspay.alerts.fraud` | 최소 1건 이상 탐지 |
 | Spark ETL | Gold 테이블 | 일별 정산 요약 생성 |
 | CDC 반영 | Delta `settlements` | INSERT/UPDATE/DELETE 반영 |
 | Airflow 오케스트레이션 | DAG run 상태 | 통합 DAG success |
@@ -519,12 +519,12 @@ sleep 10
 docker start lab-flink-taskmanager
 
 echo "[B] Debezium 커넥터 일시 중지"
-curl -X PUT http://localhost:8084/connectors/paynex-mysql-cdc/pause
+curl -X PUT http://localhost:8084/connectors/nexuspay-mysql-cdc/pause
 sleep 5
-curl -X PUT http://localhost:8084/connectors/paynex-mysql-cdc/resume
+curl -X PUT http://localhost:8084/connectors/nexuspay-mysql-cdc/resume
 
 echo "[C] Airflow ETL 백필 DAG 실행"
-docker exec lab-airflow-web airflow dags trigger paynex_backfill_recovery_dag \
+docker exec lab-airflow-web airflow dags trigger nexuspay_backfill_recovery_dag \
   --conf '{"target_date":"2026-04-01","reason":"week8_failure_drill"}'
 
 echo "[done] failure drills completed"
@@ -532,15 +532,15 @@ echo "[done] failure drills completed"
 
 ### 4-3. 백필 및 재처리 검증
 
-Week 7에서 만든 `paynex_backfill_recovery_dag.py`를 실제 운영 복구 관점으로 검증한다.
+Week 7에서 만든 `nexuspay_backfill_recovery_dag.py`를 실제 운영 복구 관점으로 검증한다.
 
 ```bash
 # 특정 날짜 재처리
-docker exec lab-airflow-web airflow dags trigger paynex_backfill_recovery_dag \
+docker exec lab-airflow-web airflow dags trigger nexuspay_backfill_recovery_dag \
   --conf '{"target_date":"2026-04-01","mode":"reprocess"}'
 
 # DAG 실행 결과 확인
-docker exec lab-airflow-web airflow dags list-runs -d paynex_backfill_recovery_dag
+docker exec lab-airflow-web airflow dags list-runs -d nexuspay_backfill_recovery_dag
 ```
 
 ### 4-4. 장애 복구 결과 문서화
@@ -571,7 +571,7 @@ docker exec lab-airflow-web airflow dags list-runs -d paynex_backfill_recovery_d
 ### 5-1. 최종 아키텍처 문서 작성
 
 ```markdown
-# docs/final/paynex-final-architecture.md
+# docs/final/nexuspay-final-architecture.md
 
 ## 1. 전체 아키텍처
 API / CSV / PostgreSQL / MySQL
@@ -664,13 +664,13 @@ git commit -m "feat: add week8 end-to-end integration rehearsal guide"
 | 2 | `docs/final/acceptance-criteria.md` (성공 기준 문서) | ☐ |
 | 3 | `scripts/e2e/run_business_day_rehearsal.sh` (통합 리허설 실행 스크립트) | ☐ |
 | 4 | `scripts/e2e/mysql_cdc_changes.sql` (CDC 변경 시나리오 SQL) | ☐ |
-| 5 | `dags/paynex_acceptance_rehearsal_dag.py` (최종 수용 테스트 DAG) | ☐ |
+| 5 | `dags/nexuspay_acceptance_rehearsal_dag.py` (최종 수용 테스트 DAG) | ☐ |
 | 6 | `scripts/e2e/verify_end_to_end.sh` (End-to-End 계약 검증 스크립트) | ☐ |
 | 7 | `spark-etl/jobs/build_pipeline_kpis.py` (최종 KPI 요약 잡) | ☐ |
 | 8 | `scripts/e2e/run_failure_drills.sh` (장애 주입 리허설 스크립트) | ☐ |
 | 9 | `scripts/e2e/collect_pipeline_snapshot.sh` (운영 상태 스냅샷 수집) | ☐ |
 | 10 | `docs/final/failure-drill-report.md` (장애 복구 리허설 보고서) | ☐ |
-| 11 | `docs/final/paynex-final-architecture.md` (최종 아키텍처 문서) | ☐ |
+| 11 | `docs/final/nexuspay-final-architecture.md` (최종 아키텍처 문서) | ☐ |
 | 12 | `docs/final/acceptance-test-report.md` (수용 테스트 결과 보고서) | ☐ |
 | 13 | `docs/final/portfolio-demo-script.md` (포트폴리오 데모 스크립트) | ☐ |
 | 14 | 통합 리허설 실행 로그 및 화면 캡처 | ☐ |
@@ -685,7 +685,7 @@ git commit -m "feat: add week8 end-to-end integration rehearsal guide"
 | Contract Check | 계층 간 기대 결과 확인 | Kafka 토픽, Delta 테이블, DAG 상태 점검 |
 | Reconciliation | 소스↔타겟 정합성 비교 | MySQL ↔ Delta Lake 건수 및 상태 반영 검증 |
 | Failure Drill | 의도적 장애 주입 후 복구 검증 | Flink, CDC, Airflow 장애 시나리오 테스트 |
-| Backfill | 과거 날짜 재처리 | `paynex_backfill_recovery_dag.py` 실제 재실행 검증 |
+| Backfill | 과거 날짜 재처리 | `nexuspay_backfill_recovery_dag.py` 실제 재실행 검증 |
 | Operational Readiness | 운영 준비 상태 | SLA, 알림, 복구 절차, Runbook 정리 |
 | Portfolio Packaging | 고객/면접/제안용 산출물 정리 | 최종 구조도, 보고서, 데모 스크립트 작성 |
 

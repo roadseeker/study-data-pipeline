@@ -11,7 +11,7 @@
 
 ### 배경 설정
 
-Week 6까지 페이넥스(PayNex)의 배치 이관(Spark JDBC), 실시간 CDC(Debezium), 배치 ETL(Spark), 실시간 처리(Flink)가 각각 동작하게 되었다. 그러나 지금은 운영자가 Spark 작업, 정합성 검증 스크립트, CDC 상태 점검을 수동으로 실행하고 있어 장애 대응이 늦고 재실행 기준도 일관되지 않다. 페이넥스 COO가 다음 요구사항을 제시한다.
+Week 6까지 Nexus Pay의 배치 이관(Spark JDBC), 실시간 CDC(Debezium), 배치 ETL(Spark), 실시간 처리(Flink)가 각각 동작하게 되었다. 그러나 지금은 운영자가 Spark 작업, 정합성 검증 스크립트, CDC 상태 점검을 수동으로 실행하고 있어 장애 대응이 늦고 재실행 기준도 일관되지 않다. Nexus Pay COO가 다음 요구사항을 제시한다.
 
 > "매일 새벽 3시 배치 이관이 자동으로 실행되고, 6시 전에 정산 리포트가 준비되어야 합니다. CDC 커넥터가 멈추거나 배치 작업이 SLA를 넘기면 운영팀이 바로 알아야 해요. 특정 날짜 데이터가 잘못 들어간 경우에는 해당 날짜만 다시 돌릴 수 있어야 합니다."
 >
@@ -46,7 +46,7 @@ Week 6까지 페이넥스(PayNex)의 배치 이관(Spark JDBC), 실시간 CDC(De
 
 Week 1에서는 Airflow를 "기동 확인용 오케스트레이터"로만 사용했다. Week 7에서는 운영 관점에서 Airflow를 다시 정리한다.
 
-| 개념 | 의미 | PayNex 적용 예시 |
+| 개념 | 의미 | Nexus Pay 적용 예시 |
 |------|------|------------------|
 | DAG | 워크플로우 정의 단위 | 일일 이관 DAG, ETL DAG, CDC 모니터링 DAG |
 | TaskGroup | 논리적 작업 묶음 | 마스터 테이블 Full Export 묶음 |
@@ -61,7 +61,7 @@ Week 1에서는 Airflow를 "기동 확인용 오케스트레이터"로만 사용
 
 | 운영 요구사항 | Airflow 기능 | 구현 방식 |
 |--------------|-------------|----------|
-| 매일 03:00 통합 배치 자동 실행 | Cron Schedule | `paynex_daily_master`를 `0 3 * * *`로 스케줄 |
+| 매일 03:00 통합 배치 자동 실행 | Cron Schedule | `nexuspay_daily_master`를 `0 3 * * *`로 스케줄 |
 | 마스터 DAG 내부에서 이관 후 ETL 순차 실행 | `TriggerDagRunOperator` | `wait_for_completion=True`로 하위 DAG를 동기 실행 |
 | CDC 커넥터 이상 즉시 감지 | 주기성 모니터링 DAG | 5분 주기 상태 점검 |
 | 실패 시 운영팀 알림 | Callback | `on_failure_callback` |
@@ -81,11 +81,11 @@ mkdir -p scripts/airflow
 ```text
 .
 ├── dags/
-│   ├── paynex_daily_migration_dag.py
-│   ├── paynex_daily_etl_dag.py
-│   ├── paynex_cdc_monitoring_dag.py
-│   ├── paynex_backfill_recovery_dag.py
-│   ├── paynex_daily_master_dag.py
+│   ├── nexuspay_daily_migration_dag.py
+│   ├── nexuspay_daily_etl_dag.py
+│   ├── nexuspay_cdc_monitoring_dag.py
+│   ├── nexuspay_backfill_recovery_dag.py
+│   ├── nexuspay_daily_master_dag.py
 │   └── utils/
 ├── plugins/
 │   └── alerting.py
@@ -142,14 +142,14 @@ DOCKERFILE
     build:
       context: .
       dockerfile: Dockerfile.airflow
-    image: paynex-airflow:week7
+    image: nexuspay-airflow:week7
     container_name: lab-airflow-init
     entrypoint: >
       bash -c "
         airflow db init &&
         airflow users create
-          --username admin
-          --password admin1234
+          --username ${AIRFLOW_ADMIN_USERNAME}
+          --password ${AIRFLOW_ADMIN_PASSWORD}
           --firstname Admin
           --lastname User
           --role Admin
@@ -163,8 +163,8 @@ DOCKERFILE
           --conn-host kafka-connect
           --conn-port 8083
           --conn-schema http &&
-        airflow variables set paynex_alert_email ops@paynex.local &&
-        airflow variables set paynex_slack_webhook http://mock-webhook.local/slack
+        airflow variables set nexuspay_alert_email ops@nexuspay.local &&
+        airflow variables set nexuspay_slack_webhook http://mock-webhook.local/slack
       "
     volumes:
       - ./dags:/opt/airflow/dags
@@ -178,7 +178,7 @@ DOCKERFILE
     build:
       context: .
       dockerfile: Dockerfile.airflow
-    image: paynex-airflow:week7
+    image: nexuspay-airflow:week7
     container_name: lab-airflow-web
     command: airflow webserver --port 8083
     environment:
@@ -210,7 +210,7 @@ DOCKERFILE
     build:
       context: .
       dockerfile: Dockerfile.airflow
-    image: paynex-airflow:week7
+    image: nexuspay-airflow:week7
     container_name: lab-airflow-sched
     command: airflow scheduler
     environment:
@@ -240,7 +240,7 @@ docker compose up -d airflow-webserver airflow-scheduler
 curl -sf http://localhost:8083/health | python3 -m json.tool
 docker exec lab-airflow-web airflow connections get spark_default
 docker exec lab-airflow-web airflow connections get kafka_connect_api
-docker exec lab-airflow-web airflow variables get paynex_alert_email
+docker exec lab-airflow-web airflow variables get nexuspay_alert_email
 ```
 
 **Day 1 완료 기준**: Airflow 커스텀 이미지 빌드 완료, Web UI 접속 성공, `spark_default`/`kafka_connect_api` 연결 확인, 운영 요구사항과 Airflow 기능 매핑 정리 완료.
@@ -275,7 +275,7 @@ from airflow.models import Variable
 
 
 def _post_webhook(payload):
-    webhook = Variable.get("paynex_slack_webhook", default_var="")
+    webhook = Variable.get("nexuspay_slack_webhook", default_var="")
     if not webhook:
         print("[alert] webhook not configured")
         print(json.dumps(payload, ensure_ascii=False))
@@ -289,7 +289,7 @@ def _post_webhook(payload):
 def task_failure_alert(context):
     ti = context["task_instance"]
     payload = {
-        "text": f"[PayNex Airflow] FAILED - {ti.dag_id}.{ti.task_id} ({context['ds']})"
+        "text": f"[Nexus Pay Airflow] FAILED - {ti.dag_id}.{ti.task_id} ({context['ds']})"
     }
     _post_webhook(payload)
 
@@ -297,14 +297,14 @@ def task_failure_alert(context):
 def task_success_alert(context):
     ti = context["task_instance"]
     payload = {
-        "text": f"[PayNex Airflow] SUCCESS - {ti.dag_id}.{ti.task_id} ({context['ds']})"
+        "text": f"[Nexus Pay Airflow] SUCCESS - {ti.dag_id}.{ti.task_id} ({context['ds']})"
     }
     _post_webhook(payload)
 
 
 def sla_miss_alert(dag, task_list, blocking_task_list, slas, blocking_tis):
     payload = {
-        "text": f"[PayNex Airflow] SLA MISS - {dag.dag_id} / tasks={task_list}"
+        "text": f"[Nexus Pay Airflow] SLA MISS - {dag.dag_id} / tasks={task_list}"
     }
     _post_webhook(payload)
 PYEOF
@@ -321,10 +321,10 @@ from pyspark.sql.functions import current_timestamp, lit
 from datetime import datetime
 import argparse
 
-JDBC_URL = "jdbc:mysql://mysql:3306/paynex_legacy"
+JDBC_URL = "jdbc:mysql://mysql:3306/nexuspay_legacy"
 JDBC_PROPS = {
-    "user": "paynex",
-    "password": "paynex1234",
+    "user": "nexuspay",
+    "password": "nexuspay1234",
     "driver": "com.mysql.cj.jdbc.Driver",
 }
 MIGRATION_ROOT = "/data/delta/migration"
@@ -332,7 +332,7 @@ MIGRATION_ROOT = "/data/delta/migration"
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-Master-Refresh") \
+        .appName("nexuspay-Master-Refresh") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
@@ -357,7 +357,7 @@ def run(table_name, partition_column, num_partitions):
     )
 
     df = df.withColumn("_ingested_at", current_timestamp()) \
-           .withColumn("_source", lit("mysql.paynex_legacy")) \
+           .withColumn("_source", lit("mysql.nexuspay_legacy")) \
            .withColumn("_migration_type", lit("airflow_master_refresh")) \
            .withColumn("_batch_id", lit(datetime.now().strftime("%Y%m%d_%H%M%S")))
 
@@ -376,10 +376,10 @@ if __name__ == "__main__":
 PYEOF
 ```
 
-### 2-4. `paynex_daily_migration_dag.py`
+### 2-4. `nexuspay_daily_migration_dag.py`
 
 ```python
-cat > dags/paynex_daily_migration_dag.py << 'PYEOF'
+cat > dags/nexuspay_daily_migration_dag.py << 'PYEOF'
 from datetime import timedelta
 from pendulum import datetime
 
@@ -397,14 +397,14 @@ SPARK_PACKAGES = (
 )
 
 default_args = {
-    "owner": "paynex-data-platform",
+    "owner": "nexuspay-data-platform",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": task_failure_alert,
 }
 
 with DAG(
-    dag_id="paynex_daily_migration",
+    dag_id="nexuspay_daily_migration",
     start_date=datetime(2026, 4, 1, tz="Asia/Seoul"),
     schedule=None,
     catchup=False,
@@ -412,7 +412,7 @@ with DAG(
     default_args=default_args,
     dagrun_timeout=timedelta(hours=2),
     sla_miss_callback=sla_miss_alert,
-    tags=["paynex", "week7", "migration"],
+    tags=["nexuspay", "week7", "migration"],
 ) as dag:
     start = EmptyOperator(task_id="start")
 
@@ -463,7 +463,7 @@ with DAG(
 
     notify_success = BashOperator(
         task_id="notify_success",
-        bash_command="echo '[PayNex] daily migration finished for {{ ds }}'",
+        bash_command="echo '[Nexus Pay] daily migration finished for {{ ds }}'",
         on_success_callback=task_success_alert,
         trigger_rule="all_success",
     )
@@ -478,10 +478,10 @@ PYEOF
 
 ```bash
 docker exec lab-airflow-web airflow dags list
-docker exec lab-airflow-web airflow dags test paynex_daily_migration 2026-04-01
+docker exec lab-airflow-web airflow dags test nexuspay_daily_migration 2026-04-01
 ```
 
-**Day 2 완료 기준**: `paynex_daily_migration` DAG 등록 성공, TaskGroup 시각화 확인, `SparkSubmitOperator` 기반 Full/Incremental/검증 흐름 실행 확인.
+**Day 2 완료 기준**: `nexuspay_daily_migration` DAG 등록 성공, TaskGroup 시각화 확인, `SparkSubmitOperator` 기반 Full/Incremental/검증 흐름 실행 확인.
 
 ---
 
@@ -489,14 +489,14 @@ docker exec lab-airflow-web airflow dags test paynex_daily_migration 2026-04-01
 
 ### 3-1. ETL DAG 설계
 
-Week 5의 Spark ETL은 `/data/delta/etl` 루트의 Delta Lake를 기준으로 동작하고, Week 6의 이관 DAG는 `/data/delta/migration` 아래의 마스터·CDC 데이터를 갱신한다. 운영 흐름에서는 마스터 DAG가 "migration 완료 → ETL 실행" 순서를 보장하므로, `paynex_daily_etl`은 독립 실행 가능한 수동 DAG로 두고 일일 스케줄은 마스터 DAG 한 곳에만 둔다.
+Week 5의 Spark ETL은 `/data/delta/etl` 루트의 Delta Lake를 기준으로 동작하고, Week 6의 이관 DAG는 `/data/delta/migration` 아래의 마스터·CDC 데이터를 갱신한다. 운영 흐름에서는 마스터 DAG가 "migration 완료 → ETL 실행" 순서를 보장하므로, `nexuspay_daily_etl`은 독립 실행 가능한 수동 DAG로 두고 일일 스케줄은 마스터 DAG 한 곳에만 둔다.
 
 ```text
-paynex_daily_master
+nexuspay_daily_master
          ↓
-trigger paynex_daily_migration (wait_for_completion=True)
+trigger nexuspay_daily_migration (wait_for_completion=True)
          ↓
-trigger paynex_daily_etl (wait_for_completion=True)
+trigger nexuspay_daily_etl (wait_for_completion=True)
          ↓
 run_full_etl_pipeline
          ↓
@@ -517,7 +517,7 @@ import sys
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-Publish-Gold-Report") \
+        .appName("nexuspay-Publish-Gold-Report") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
@@ -541,7 +541,7 @@ from pyspark.sql import SparkSession
 
 def create_spark():
     return SparkSession.builder \
-        .appName("PayNex-Verify-Gold-Outputs") \
+        .appName("nexuspay-Verify-Gold-Outputs") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
@@ -558,10 +558,10 @@ if __name__ == "__main__":
 PYEOF
 ```
 
-### 3-3. `paynex_daily_etl_dag.py`
+### 3-3. `nexuspay_daily_etl_dag.py`
 
 ```python
-cat > dags/paynex_daily_etl_dag.py << 'PYEOF'
+cat > dags/nexuspay_daily_etl_dag.py << 'PYEOF'
 from datetime import timedelta
 from pendulum import datetime
 
@@ -574,19 +574,19 @@ from alerting import task_failure_alert, sla_miss_alert
 SPARK_PACKAGES = "io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33"
 
 with DAG(
-    dag_id="paynex_daily_etl",
+    dag_id="nexuspay_daily_etl",
     start_date=datetime(2026, 4, 1, tz="Asia/Seoul"),
     schedule=None,
     catchup=False,
     max_active_runs=1,
     default_args={
-        "owner": "paynex-data-platform",
+        "owner": "nexuspay-data-platform",
         "retries": 1,
         "retry_delay": timedelta(minutes=10),
         "on_failure_callback": task_failure_alert,
     },
     sla_miss_callback=sla_miss_alert,
-    tags=["paynex", "week7", "etl"],
+    tags=["nexuspay", "week7", "etl"],
 ) as dag:
     start = EmptyOperator(task_id="start")
 
@@ -627,21 +627,21 @@ PYEOF
 
 ```bash
 docker exec lab-airflow-web airflow dags list
-docker exec lab-airflow-web airflow dags test paynex_daily_etl 2026-04-01
+docker exec lab-airflow-web airflow dags test nexuspay_daily_etl 2026-04-01
 ```
 
-**Day 3 완료 기준**: `paynex_daily_etl` DAG 등록 성공, `/data/delta/etl` 경로 기준 Gold 산출물 읽기 확인, Week 5 ETL 파이프라인이 Airflow 태스크로 호출되는 것 확인.
+**Day 3 완료 기준**: `nexuspay_daily_etl` DAG 등록 성공, `/data/delta/etl` 경로 기준 Gold 산출물 읽기 확인, Week 5 ETL 파이프라인이 Airflow 태스크로 호출되는 것 확인.
 
 ---
 
 ## Day 4: CDC 모니터링 + 장애 복구
 
-### 4-1. `paynex_cdc_monitoring_dag.py`
+### 4-1. `nexuspay_cdc_monitoring_dag.py`
 
 CDC는 배치와 다르게 "작업 실행"보다 "상태 감시"가 핵심이다. Kafka Connect REST API를 조회해 Debezium 커넥터 상태를 점검한다.
 
 ```python
-cat > dags/paynex_cdc_monitoring_dag.py << 'PYEOF'
+cat > dags/nexuspay_cdc_monitoring_dag.py << 'PYEOF'
 from datetime import timedelta
 from pendulum import datetime
 
@@ -652,22 +652,22 @@ from airflow.providers.http.operators.http import HttpOperator
 from alerting import task_failure_alert, task_success_alert
 
 with DAG(
-    dag_id="paynex_cdc_monitoring",
+    dag_id="nexuspay_cdc_monitoring",
     start_date=datetime(2026, 4, 1, tz="Asia/Seoul"),
     schedule="*/5 * * * *",
     catchup=False,
     default_args={
-        "owner": "paynex-ops",
+        "owner": "nexuspay-ops",
         "retries": 1,
         "retry_delay": timedelta(minutes=2),
         "on_failure_callback": task_failure_alert,
     },
-    tags=["paynex", "week7", "cdc", "monitoring"],
+    tags=["nexuspay", "week7", "cdc", "monitoring"],
 ) as dag:
     fetch_connector_status = HttpOperator(
         task_id="fetch_connector_status",
         http_conn_id="kafka_connect_api",
-        endpoint="/connectors/paynex-mysql-cdc/status",
+        endpoint="/connectors/nexuspay-mysql-cdc/status",
         method="GET",
         log_response=True,
     )
@@ -690,7 +690,7 @@ PYEOF
 ### 4-2. 백필/복구 DAG
 
 ```python
-cat > dags/paynex_backfill_recovery_dag.py << 'PYEOF'
+cat > dags/nexuspay_backfill_recovery_dag.py << 'PYEOF'
 from datetime import timedelta
 from pendulum import datetime
 
@@ -703,17 +703,17 @@ from alerting import task_failure_alert
 SPARK_PACKAGES = "io.delta:delta-spark_2.12:3.1.0,mysql:mysql-connector-java:8.0.33"
 
 with DAG(
-    dag_id="paynex_backfill_recovery",
+    dag_id="nexuspay_backfill_recovery",
     start_date=datetime(2026, 4, 1, tz="Asia/Seoul"),
     schedule=None,
     catchup=False,
     default_args={
-        "owner": "paynex-ops",
+        "owner": "nexuspay-ops",
         "retries": 0,
         "on_failure_callback": task_failure_alert,
     },
     params={"target_date": "2026-04-01"},
-    tags=["paynex", "week7", "backfill"],
+    tags=["nexuspay", "week7", "backfill"],
 ) as dag:
     start = EmptyOperator(task_id="start")
 
@@ -750,10 +750,10 @@ PYEOF
 
 ```bash
 # 1. CDC 상태 점검 DAG 테스트
-docker exec lab-airflow-web airflow dags test paynex_cdc_monitoring 2026-04-01
+docker exec lab-airflow-web airflow dags test nexuspay_cdc_monitoring 2026-04-01
 
 # 2. 특정 날짜 백필
-docker exec lab-airflow-web airflow dags trigger paynex_backfill_recovery \
+docker exec lab-airflow-web airflow dags trigger nexuspay_backfill_recovery \
   --conf '{"target_date":"2026-03-31"}'
 ```
 
@@ -773,7 +773,7 @@ docker exec lab-airflow-web airflow dags trigger paynex_backfill_recovery \
 Day 2~4에 만든 DAG를 "운영 진입점" 하나로 연결한다.
 
 ```python
-cat > dags/paynex_daily_master_dag.py << 'PYEOF'
+cat > dags/nexuspay_daily_master_dag.py << 'PYEOF'
 from datetime import timedelta
 from pendulum import datetime
 
@@ -782,19 +782,19 @@ from airflow.operators.empty import EmptyOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 with DAG(
-    dag_id="paynex_daily_master",
+    dag_id="nexuspay_daily_master",
     start_date=datetime(2026, 4, 1, tz="Asia/Seoul"),
     schedule="0 3 * * *",
     catchup=False,
     max_active_runs=1,
-    default_args={"owner": "paynex-ops", "retries": 0},
-    tags=["paynex", "week7", "master"],
+    default_args={"owner": "nexuspay-ops", "retries": 0},
+    tags=["nexuspay", "week7", "master"],
 ) as dag:
     start = EmptyOperator(task_id="start")
 
     trigger_migration = TriggerDagRunOperator(
         task_id="trigger_migration",
-        trigger_dag_id="paynex_daily_migration",
+        trigger_dag_id="nexuspay_daily_migration",
         wait_for_completion=True,
         logical_date="{{ ds }}",
         conf={"target_date": "{{ ds }}"},
@@ -806,7 +806,7 @@ with DAG(
 
     trigger_etl = TriggerDagRunOperator(
         task_id="trigger_etl",
-        trigger_dag_id="paynex_daily_etl",
+        trigger_dag_id="nexuspay_daily_etl",
         wait_for_completion=True,
         logical_date="{{ ds }}",
         conf={"target_date": "{{ ds }}"},
@@ -826,24 +826,24 @@ PYEOF
 
 ```bash
 cat > docs/airflow-operations-guide.md << 'EOF'
-# PayNex Airflow 운영 가이드
+# Nexus Pay Airflow 운영 가이드
 
 ## 1. DAG 구성
 
 | DAG | 스케줄 | 역할 |
 |-----|--------|------|
-| paynex_daily_master | 03:00 | 일일 통합 오케스트레이션 진입점 |
-| paynex_daily_migration | 수동 / master 트리거 | Spark JDBC 배치 이관 + 검증 |
-| paynex_daily_etl | 수동 / master 트리거 | Spark ETL + Gold 리포트 생성 |
-| paynex_cdc_monitoring | 5분 주기 | Debezium/Kafka Connect 상태 감시 |
-| paynex_backfill_recovery | 수동 | 특정 날짜 재처리 |
+| nexuspay_daily_master | 03:00 | 일일 통합 오케스트레이션 진입점 |
+| nexuspay_daily_migration | 수동 / master 트리거 | Spark JDBC 배치 이관 + 검증 |
+| nexuspay_daily_etl | 수동 / master 트리거 | Spark ETL + Gold 리포트 생성 |
+| nexuspay_cdc_monitoring | 5분 주기 | Debezium/Kafka Connect 상태 감시 |
+| nexuspay_backfill_recovery | 수동 | 특정 날짜 재처리 |
 
 ## 2. 일일 운영 체크리스트
 
-1. 03:10 이전 `paynex_daily_master` 실행 여부 확인
-2. 04:00 이전 `paynex_daily_migration` 성공 여부 확인
-3. 06:00 이전 `paynex_daily_etl` 완료 여부 확인
-4. `paynex_cdc_monitoring` 최근 1시간 실패 횟수 확인
+1. 03:10 이전 `nexuspay_daily_master` 실행 여부 확인
+2. 04:00 이전 `nexuspay_daily_migration` 성공 여부 확인
+3. 06:00 이전 `nexuspay_daily_etl` 완료 여부 확인
+4. `nexuspay_cdc_monitoring` 최근 1시간 실패 횟수 확인
 5. Slack/이메일 알림 수신 여부 확인
 
 ## 3. 장애 대응
@@ -859,7 +859,7 @@ cat > docs/airflow-operations-guide.md << 'EOF'
 3. 필요 시 커넥터 재시작 후 모니터링 DAG 재확인
 
 ### 특정 날짜 재처리
-1. `paynex_backfill_recovery` DAG 실행
+1. `nexuspay_backfill_recovery` DAG 실행
 2. `target_date` 지정
 3. 재처리 후 검증 로그 확인
 
@@ -881,7 +881,7 @@ EOF
 docker exec lab-airflow-web airflow dags list
 
 # 통합 DAG 테스트
-docker exec lab-airflow-web airflow dags test paynex_daily_master 2026-04-01
+docker exec lab-airflow-web airflow dags test nexuspay_daily_master 2026-04-01
 
 # 헬스체크
 curl -sf http://localhost:8083/health | python3 -m json.tool
@@ -906,13 +906,13 @@ git commit -m "Week 7: Airflow orchestration, monitoring, and recovery workflows
 | 2 | docker-compose.yml Airflow 보강 | ☐ |
 | 3 | plugins/alerting.py (실패·SLA 알림 콜백) | ☐ |
 | 4 | spark-jobs/orchestration/master_refresh.py (마스터 Full Export 래퍼) | ☐ |
-| 5 | dags/paynex_daily_migration_dag.py (일일 배치 이관 DAG) | ☐ |
-| 6 | dags/paynex_daily_etl_dag.py (배치 ETL DAG) | ☐ |
+| 5 | dags/nexuspay_daily_migration_dag.py (일일 배치 이관 DAG) | ☐ |
+| 6 | dags/nexuspay_daily_etl_dag.py (배치 ETL DAG) | ☐ |
 | 7 | spark-etl/jobs/publish_gold_report.py (Gold 리포트 게시) | ☐ |
 | 8 | spark-etl/jobs/verify_gold_outputs.py (Gold 출력 검증) | ☐ |
-| 9 | dags/paynex_cdc_monitoring_dag.py (CDC 상태 점검 DAG) | ☐ |
-| 10 | dags/paynex_backfill_recovery_dag.py (백필/복구 DAG) | ☐ |
-| 11 | dags/paynex_daily_master_dag.py (통합 마스터 DAG) | ☐ |
+| 9 | dags/nexuspay_cdc_monitoring_dag.py (CDC 상태 점검 DAG) | ☐ |
+| 10 | dags/nexuspay_backfill_recovery_dag.py (백필/복구 DAG) | ☐ |
+| 11 | dags/nexuspay_daily_master_dag.py (통합 마스터 DAG) | ☐ |
 | 12 | docs/airflow-operations-guide.md (운영 가이드) | ☐ |
 | 13 | 통합 DAG 실행 로그 및 캡처 | ☐ |
 | 14 | Git 커밋 | ☐ |
