@@ -339,7 +339,10 @@ AMOUNT_RANGES = {
 }
 
 def create_transaction(seq: int) -> dict:
-    """거래 이벤트 1건 생성"""
+    """거래 이벤트 1건 생성
+
+    정수형 seq를 입력받아 거래 정보를 담은 딕셔너리를 반환하는 함수
+    """
     # 거래 유형 가중치 선택
     tx_type = random.choices(
         [t[0] for t in TX_WEIGHTS],
