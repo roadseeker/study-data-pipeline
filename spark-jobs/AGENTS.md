@@ -16,5 +16,5 @@ This folder covers Week 6 to Week 7 Spark-based migration and orchestration supp
 - Keep migration strategies clearly separated: full load, incremental load, CDC.
 - Reconciliation and source-to-target validation are mandatory concerns.
 - Prefer business-safe migration logic over convenience shortcuts.
-- Use naming and table semantics consistent with PayNex legacy migration scenarios.
+- Use naming and table semantics consistent with Nexus Pay legacy migration scenarios.
 - If a change affects Airflow orchestration, preserve compatibility with DAG-level assumptions.

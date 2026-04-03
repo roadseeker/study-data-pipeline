@@ -25,7 +25,7 @@ INSERT INTO customers (user_id, name, email, phone, grade, is_active, created_at
 SELECT
     gs AS user_id,
     '고객_' || gs AS name,
-    'user_' || gs || '@paynex.io' AS email,
+    'user_' || gs || '@nexuspay.io' AS email,
     '010-' || LPAD((random() * 9999)::INT::TEXT, 4, '0') || '-' || LPAD((random() * 9999)::INT::TEXT, 4, '0') AS phone,
     CASE
         WHEN random() < 0.70 THEN 'NORMAL'

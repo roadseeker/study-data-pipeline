@@ -18,7 +18,8 @@ This folder contains configuration, schema, and architecture-control assets that
 
 - Keep configuration files aligned with the documented weekly scenario.
 - Prefer explicit, readable values over overly abstract placeholders.
-- Use PayNex-oriented names and realistic business semantics.
+- Use nexuspay-oriented service descriptions and realistic business semantics.
+- Use `nexuspay` / `NexusPay` machine-readable identifiers consistently in configuration assets, schemas, connectors, and examples.
 - Do not add commercial-vendor-specific assumptions unless the user explicitly asks for them.
 - Preserve the Kafka topic naming convention: `<domain>.<entity>.<event>`.
 - For schemas and transformation specs, keep field names and data types consistent across scripts, jobs, and docs.

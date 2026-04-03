@@ -6,7 +6,7 @@
 수집 (Kafka · NiFi) → 변환 (Flink · Spark) → 저장 (PostgreSQL · Redis) → 오케스트레이션 (Airflow)
 ```
 
-이 저장소는 PayNex 핀테크 시나리오를 기반으로 Apache 오픈소스 중심 데이터 파이프라인 랩을 단계적으로 구축하는 프로젝트다. Week 1 범위에서는 7개 핵심 서비스를 Docker Compose로 통합 기동하고, 헬스체크·연동 검증·장애 복구 시나리오를 수행할 수 있는 실습 환경을 완성했다.
+이 저장소는 **Nexus Pay** 시나리오를 기반으로 Apache 오픈소스 중심 데이터 파이프라인 랩을 단계적으로 구축하는 프로젝트다. Nexus Pay는 안정적이고 확장 가능한 결제 플랫폼을 목표로 하는 MSA 기반 Payment Service이며, 이 저장소에서는 해당 서비스의 데이터 파이프라인을 설계·구축·검증하는 역할을 수행한다. Week 1 범위에서는 7개 핵심 서비스를 Docker Compose로 통합 기동하고, 헬스체크·연동 검증·장애 복구 시나리오를 수행할 수 있는 실습 환경을 완성했다.
 
 ## 서비스 구성
 
@@ -34,7 +34,7 @@ bash scripts/healthcheck-all.sh
 
 - 전체 스택 통합 헬스체크 `7/7` 통과
 - Airflow `environment_healthcheck` DAG 등록 및 수동 실행 성공
-- Kafka `paynex-transactions` 토픽 생성, 프로듀스/컨슈머 흐름 검증 성공
+- Kafka `nexuspay-transactions` 토픽 생성, 프로듀스/컨슈머 흐름 검증 성공
 - PostgreSQL 집계 결과를 Redis 해시에 저장하는 피처 캐싱 시뮬레이션 성공
 - 장애 테스트 3종 완료
 
@@ -88,6 +88,7 @@ docker compose down -v
 
 ## Week 2 준비 메모
 
-- 현재 `paynex-transactions` 토픽은 Week 1 연동 검증용 임시 토픽이다.
-- Week 2에서는 정식 Kafka 명명 규칙에 따라 `paynex.transactions.payment` 등으로 재구성할 예정이다.
+- 현재 `nexuspay-transactions` 토픽은 Week 1 연동 검증용 임시 토픽이다.
+- Week 2에서는 정식 Kafka 명명 규칙에 따라 `nexuspay.transactions.payment` 등으로 재구성할 예정이다.
+- 브랜드 명칭은 `Nexus Pay`로 통일하고, 기술 식별자는 `nexuspay` / `NexusPay` 규칙을 사용한다.
 - Git Bash 환경에서는 컨테이너 내부 절대경로 명령 실행 시 `docker exec ... sh -c '...'` 형태를 권장한다.

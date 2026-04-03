@@ -472,7 +472,7 @@ This is a 16-week, four-month plan based on **full-time commitment** (40 to 50 h
 
 #### Week 1
 
-> Scenario: For a PayNex data pipeline modernization PoC, build a local practice environment in which Kafka, NiFi, Flink, Spark, Airflow, Redis, and PostgreSQL all run correctly. The goal is to validate the shared environment that will serve as the foundation for the next eight weeks of practice.
+> Scenario: For a Nexus Pay data pipeline modernization PoC, build a local practice environment in which Kafka, NiFi, Flink, Spark, Airflow, Redis, and PostgreSQL all run correctly. The goal is to validate the shared environment that will serve as the foundation for the next eight weeks of practice.
 
 Five-day schedule:
 
@@ -491,7 +491,7 @@ Practice artifact composition:
 
 #### Week 2
 
-> Scenario: The PayNex CTO requires Kafka-based ingestion of 500,000 transaction events per day, growing to 2 million in the future, while letting the fraud detection team and settlement team consume the same data independently without interfering with each other. The goal this week is to validate topic architecture and fault tolerance in Kafka.
+> Scenario: The Nexus Pay CTO requires Kafka-based ingestion of 500,000 transaction events per day, growing to 2 million in the future, while letting the fraud detection team and settlement team consume the same data independently without interfering with each other. The goal this week is to validate topic architecture and fault tolerance in Kafka.
 
 Five-day schedule:
 
@@ -504,13 +504,13 @@ Five-day schedule:
 Practice artifact composition:
 
 - `config/kafka/topic-naming-convention.md` and `config/kafka/topic-configs.md`: topic design criteria and operating settings draft
-- `scripts/partition-calculator.sh` and `scripts/producer_paynex.py`: partition estimation and transaction event producer
+- `scripts/partition-calculator.sh` and `scripts/producer_nexuspay.py`: partition estimation and transaction event producer
 - `scripts/verify_partition_key.py`, `scripts/consumer_fraud_detection.py`, and `scripts/consumer_settlement.py`: partition key validation and multi-consumer-group practice
 - `docker-compose.yml` updates, `docs/fault-tolerance-report.md`, and `docs/kafka-operations-guide.md`: three-broker cluster and operational documentation for fault tolerance
 
 #### Week 3
 
-> Scenario: The PayNex CTO requests unified ingestion of payment API JSON, legacy settlement CSV, and customer master DB data into a single pipeline, with audit-friendly traceability of data origin and flow. The goal is to build a NiFi-based multi-source ingestion system and Provenance tracking framework.
+> Scenario: The Nexus Pay CTO requests unified ingestion of payment API JSON, legacy settlement CSV, and customer master DB data into a single pipeline, with audit-friendly traceability of data origin and flow. The goal is to build a NiFi-based multi-source ingestion system and Provenance tracking framework.
 
 Five-day schedule:
 
@@ -524,12 +524,12 @@ Practice artifact composition:
 
 - `scripts/api_payment_simulator.py`, `scripts/csv_settlement_generator.py`, and `scripts/init-customers.sql`: API, file, and DB source data generation and initialization
 - `config/nifi/process-group-design.md` and `config/nifi/jolt-spec-*.json`: NiFi processor-group design and source-specific standardization rules
-- `config/nifi/paynex-standard-schema.avsc` and `scripts/verify_nifi_pipeline.sh`: common event schema and integrated verification script
+- `config/nifi/nexuspay-standard-schema.avsc` and `scripts/verify_nifi_pipeline.sh`: common event schema and integrated verification script
 - `docs/provenance-audit-guide.md`, `docs/nifi-monitoring-guide.md`, and `docs/nifi-architecture.md`: lineage tracking, monitoring, and architecture documentation
 
 #### Week 4
 
-> Scenario: Once real-time events begin flowing into the `paynex.events.ingested` topic through NiFi, the PayNex CTO requires five-minute aggregations, real-time fraud detection, and exactly-once guarantees. This week completes the core real-time transformation layer with Apache Flink.
+> Scenario: Once real-time events begin flowing into the `nexuspay.events.ingested` topic through NiFi, the Nexus Pay CTO requires five-minute aggregations, real-time fraud detection, and exactly-once guarantees. This week completes the core real-time transformation layer with Apache Flink.
 
 Five-day schedule:
 
@@ -542,13 +542,13 @@ Five-day schedule:
 Practice artifact composition:
 
 - `docs/flink-concepts.md` and `flink-jobs/pom.xml`: Flink concepts and Maven-based project setup
-- `flink-jobs/src/main/java/com/paynex/flink/job/TransactionAggregationJob.java` and `FraudDetectionJob.java`: core job implementations for window aggregation and fraud detection
+- `flink-jobs/src/main/java/com/nexuspay/flink/job/TransactionAggregationJob.java` and `FraudDetectionJob.java`: core job implementations for window aggregation and fraud detection
 - `scripts/flink_event_generator.py` and `scripts/fraud_alert_redis_sink.py`: real-time test event generation and Redis alert persistence
 - `scripts/verify_flink_pipeline.sh`, `scripts/monitor_checkpoints.sh`, and `docs/flink-operations-guide.md`: exactly-once verification, checkpoint monitoring, and operations documentation
 
 #### Week 5
 
-> Scenario: The PayNex CFO requires daily and monthly settlement reporting, audit traceability through time travel, and data quality validation. Apache Spark batch ETL is used to address these requirements.
+> Scenario: The Nexus Pay CFO requires daily and monthly settlement reporting, audit traceability through time travel, and data quality validation. Apache Spark batch ETL is used to address these requirements.
 
 Five-day schedule:
 
@@ -567,7 +567,7 @@ Practice artifact composition:
 
 #### Week 6
 
-> Scenario: The PayNex CIO presents a migration task involving 300 million rows from a legacy MySQL settlement system into Delta Lake, with no service interruption allowed and different strategies needed by table type.
+> Scenario: The Nexus Pay CIO presents a migration task involving 300 million rows from a legacy MySQL settlement system into Delta Lake, with no service interruption allowed and different strategies needed by table type.
 
 Five-day schedule:
 
@@ -588,7 +588,7 @@ The plan includes 15 deliverables and a lead-in to Week 7 (Airflow orchestration
 
 #### Week 7
 
-> Scenario: The PayNex COO requires operational automation of the Week 1 to 6 pipelines using Apache Airflow, including Spark JDBC batch migration, Spark batch ETL, and Debezium CDC. Migration must run daily at 03:00, settlement reports must complete before 06:00, CDC failures and SLA delays must trigger immediate alerts, and backfill or reprocessing for specific dates must be possible.
+> Scenario: The Nexus Pay COO requires operational automation of the Week 1 to 6 pipelines using Apache Airflow, including Spark JDBC batch migration, Spark batch ETL, and Debezium CDC. Migration must run daily at 03:00, settlement reports must complete before 06:00, CDC failures and SLA delays must trigger immediate alerts, and backfill or reprocessing for specific dates must be possible.
 
 Five-day schedule:
 
@@ -601,13 +601,13 @@ Five-day schedule:
 Practice artifact composition:
 
 - `Dockerfile.airflow` and `plugins/alerting.py`: custom Airflow image plus failure and SLA-miss alert plugin
-- `dags/paynex_daily_migration_dag.py` and `spark-jobs/orchestration/master_refresh.py`: Spark JDBC migration and master refresh DAG
-- `dags/paynex_daily_etl_dag.py`, `spark-etl/jobs/publish_gold_report.py`, and `spark-etl/jobs/verify_gold_outputs.py`: Week 5 batch ETL integration and Gold output validation automation
-- `dags/paynex_cdc_monitoring_dag.py`, `dags/paynex_backfill_recovery_dag.py`, `dags/paynex_daily_master_dag.py`, and `docs/airflow-operations-guide.md`: CDC monitoring, backfill and recovery, unified daily master DAG, and operations runbook
+- `dags/nexuspay_daily_migration_dag.py` and `spark-jobs/orchestration/master_refresh.py`: Spark JDBC migration and master refresh DAG
+- `dags/nexuspay_daily_etl_dag.py`, `spark-etl/jobs/publish_gold_report.py`, and `spark-etl/jobs/verify_gold_outputs.py`: Week 5 batch ETL integration and Gold output validation automation
+- `dags/nexuspay_cdc_monitoring_dag.py`, `dags/nexuspay_backfill_recovery_dag.py`, `dags/nexuspay_daily_master_dag.py`, and `docs/airflow-operations-guide.md`: CDC monitoring, backfill and recovery, unified daily master DAG, and operations runbook
 
 #### Week 8
 
-> Scenario: The PayNex CTO and COO require all assets from Weeks 1 to 7, including Kafka, NiFi, Flink, Spark, Spark JDBC, Debezium, and Airflow, to be connected into a single operational scenario and validated at customer acceptance-test level. Even when API JSON, settlement CSV, PostgreSQL, and MySQL change data all arrive simultaneously, real-time detection and batch reporting must remain consistent, and failure injection, recovery, and backfill must be reproducible.
+> Scenario: The Nexus Pay CTO and COO require all assets from Weeks 1 to 7, including Kafka, NiFi, Flink, Spark, Spark JDBC, Debezium, and Airflow, to be connected into a single operational scenario and validated at customer acceptance-test level. Even when API JSON, settlement CSV, PostgreSQL, and MySQL change data all arrive simultaneously, real-time detection and batch reporting must remain consistent, and failure injection, recovery, and backfill must be reproducible.
 
 Five-day schedule:
 
@@ -621,9 +621,9 @@ Practice artifact composition:
 
 - `config/e2e/business_day_scenario.yaml` and `docs/final/acceptance-criteria.md`: integrated business-day scenario and customer acceptance criteria
 - `scripts/e2e/run_business_day_rehearsal.sh` and `scripts/e2e/mysql_cdc_changes.sql`: operational rehearsal script bundling API, CSV, Kafka, and CDC plus change scenarios
-- `dags/paynex_acceptance_rehearsal_dag.py`, `scripts/e2e/verify_end_to_end.sh`, and `spark-etl/jobs/build_pipeline_kpis.py`: integrated acceptance-test DAG, end-to-end verification, and final KPI summary
+- `dags/nexuspay_acceptance_rehearsal_dag.py`, `scripts/e2e/verify_end_to_end.sh`, and `spark-etl/jobs/build_pipeline_kpis.py`: integrated acceptance-test DAG, end-to-end verification, and final KPI summary
 - `scripts/e2e/run_failure_drills.sh` and `scripts/e2e/collect_pipeline_snapshot.sh`: failure injection, recovery rehearsal, and operational snapshot collection
-- `docs/final/failure-drill-report.md`, `docs/final/acceptance-test-report.md`, `docs/final/paynex-final-architecture.md`, and `docs/final/portfolio-demo-script.md`: final recovery report, acceptance-test result report, architecture documentation, and portfolio demo materials
+- `docs/final/failure-drill-report.md`, `docs/final/acceptance-test-report.md`, `docs/final/nexuspay-final-architecture.md`, and `docs/final/portfolio-demo-script.md`: final recovery report, acceptance-test result report, architecture documentation, and portfolio demo materials
 
 #### Final Git Repository Directory and File Structure
 
@@ -647,7 +647,7 @@ pipeline-lab/
 │   │   ├── jolt-spec-api-payment.json          (W3) REST API JSON to standard schema conversion
 │   │   ├── jolt-spec-file-settlement.json      (W3) Settlement CSV to standard schema conversion
 │   │   ├── jolt-spec-db-customer.json          (W3) Customer DB to standard schema conversion
-│   │   └── paynex-standard-schema.avsc         (W3) Unified 14-field Avro schema
+│   │   └── nexuspay-standard-schema.avsc         (W3) Unified 14-field Avro schema
 │   ├── flink/                                  (W1) Placeholder directory for Flink configuration
 │   ├── spark/                                  (W1) Placeholder directory for Spark configuration
 │   ├── airflow/                                (W1) Placeholder directory for Airflow configuration
@@ -657,12 +657,12 @@ pipeline-lab/
 │
 ├── dags/
 │   ├── healthcheck_dag.py                      (W1) Health-check DAG for seven components
-│   ├── paynex_daily_migration_dag.py           (W7) Spark JDBC batch migration DAG
-│   ├── paynex_daily_etl_dag.py                 (W7) Spark ETL (Bronze to Silver to Gold) DAG
-│   ├── paynex_cdc_monitoring_dag.py            (W7) Kafka Connect CDC monitoring DAG
-│   ├── paynex_backfill_recovery_dag.py         (W7) Date-specific backfill and reprocessing DAG
-│   ├── paynex_daily_master_dag.py              (W7) Daily integrated orchestration master DAG
-│   └── paynex_acceptance_rehearsal_dag.py      (W8) Customer acceptance-test rehearsal DAG
+│   ├── nexuspay_daily_migration_dag.py           (W7) Spark JDBC batch migration DAG
+│   ├── nexuspay_daily_etl_dag.py                 (W7) Spark ETL (Bronze to Silver to Gold) DAG
+│   ├── nexuspay_cdc_monitoring_dag.py            (W7) Kafka Connect CDC monitoring DAG
+│   ├── nexuspay_backfill_recovery_dag.py         (W7) Date-specific backfill and reprocessing DAG
+│   ├── nexuspay_daily_master_dag.py              (W7) Daily integrated orchestration master DAG
+│   └── nexuspay_acceptance_rehearsal_dag.py      (W8) Customer acceptance-test rehearsal DAG
 │
 ├── plugins/
 │   └── alerting.py                             (W7) Slack and email callbacks for failures and SLA misses
@@ -691,7 +691,7 @@ pipeline-lab/
 │       ├── acceptance-criteria.md              (W8) Acceptance-test scope and success criteria
 │       ├── acceptance-test-report.md           (W8) Final acceptance-test results report
 │       ├── failure-drill-report.md             (W8) Failure injection and recovery rehearsal report
-│       ├── paynex-final-architecture.md        (W8) Final end-to-end architecture document
+│       ├── nexuspay-final-architecture.md        (W8) Final end-to-end architecture document
 │       └── portfolio-demo-script.md            (W8) Portfolio demo scenario
 │
 ├── scripts/
@@ -700,7 +700,7 @@ pipeline-lab/
 │   ├── init-mysql.sql                          (W6) MySQL legacy four-table schema and sample data
 │   ├── healthcheck-all.sh                      (W1) Integrated health check for all components
 │   ├── partition-calculator.sh                 (W2) Partition count estimation script
-│   ├── producer_paynex.py                      (W2) Kafka transaction event producer (`confluent-kafka`)
+│   ├── producer_nexuspay.py                      (W2) Kafka transaction event producer (`confluent-kafka`)
 │   ├── verify_partition_key.py                 (W2) Partition-key routing verification
 │   ├── consumer_fraud_detection.py             (W2) Fraud detection consumer group
 │   ├── consumer_settlement.py                  (W2) Settlement processing consumer group
@@ -756,7 +756,7 @@ pipeline-lab/
 │
 ├── flink-jobs/                                 -- Week 4 real-time stream processing --
 │   ├── pom.xml                                 (W4) Maven build settings (Flink 1.18.1, Kafka connector)
-│   └── src/main/java/com/paynex/flink/
+│   └── src/main/java/com/nexuspay/flink/
 │       ├── job/
 │       │   ├── TransactionAggregationJob.java  (W4) Five-minute window transaction aggregation
 │       │   ├── SessionWindowAnalysisJob.java   (W4) Session-window user behavior analysis
@@ -767,11 +767,11 @@ pipeline-lab/
 │       │   ├── LateDataSideOutputFunction.java     (W4) Late data side-output handling
 │       │   └── FraudDetectionFunction.java         (W4) KeyedProcess-based detection logic
 │       ├── model/
-│       │   ├── PaynexEvent.java                (W4) Fourteen-field event POJO
+│       │   ├── NexusPayEvent.java                (W4) Fourteen-field event POJO
 │       │   ├── AggregatedResult.java           (W4) Window aggregation result model
 │       │   └── FraudAlert.java                 (W4) Fraud alert model
 │       └── util/
-│           ├── PaynexEventDeserializer.java    (W4) JSON to POJO deserialization with `SNAKE_CASE` mapping
+│           ├── NexusPayEventDeserializer.java    (W4) JSON to POJO deserialization with `SNAKE_CASE` mapping
 │           ├── FlinkConfigUtil.java            (W4) Flink configuration utility
 │           └── ExactlyOnceKafkaSinkBuilder.java (W4) Exactly-once Kafka sink builder
 │

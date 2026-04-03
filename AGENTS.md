@@ -31,7 +31,7 @@ When making changes, preserve the weekly progression. Do not introduce later-wee
 
 ## Scenario Context
 
-All pipeline work is framed around the fictional fintech company **PayNex**. Week-by-week deliverables should fit that scenario and feel like realistic consulting outputs for stakeholders such as the CTO, CIO, CFO, and COO.
+All pipeline work is framed around the fictional fintech company **Nexus Pay**. Nexus Pay is an MSA-based payment service being developed by the product engineering team with the goal of becoming a stable and scalable payment platform. In this repository, the working role is to design, implement, validate, and operate the data pipeline that supports the Nexus Pay service. Week-by-week deliverables should fit that scenario and feel like realistic consulting outputs for stakeholders such as the CTO, CIO, CFO, and COO.
 
 Use this framing consistently in:
 
@@ -75,7 +75,9 @@ Use this framing consistently in:
 - Java is used for Flink jobs.
 - Shell scripts should be readable, task-oriented, and verification-friendly.
 - Keep verification assets discoverable with names like `verify_*.sh` or `verify_*.py` when appropriate.
-- Prefer realistic identifiers such as `paynex.events.ingested` and business-oriented sample records.
+- Prefer realistic business-oriented sample records and production-style identifiers.
+- Use **Nexus Pay** for human-facing scenario names, service descriptions, and stakeholder narratives.
+- Standardize machine-readable identifiers on `nexuspay` / `NexusPay` for topics, package names, job IDs, and example assets unless compatibility with an existing artifact requires otherwise.
 
 ## Data and Environment Safety
 

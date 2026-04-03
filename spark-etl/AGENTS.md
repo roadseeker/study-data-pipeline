@@ -13,4 +13,4 @@ This folder contains Week 5 batch ETL deliverables centered on Spark and Delta L
 - Favor deterministic, batch-friendly transformations.
 - Delta Lake operations such as `MERGE`, maintenance, and time travel should be reflected accurately.
 - Code, config, and verification scripts should stay synchronized.
-- Business outputs should remain meaningful for PayNex reporting use cases such as daily summaries, customer statistics, and fee settlement.
+- Business outputs should remain meaningful for Nexus Pay reporting use cases such as daily summaries, customer statistics, and fee settlement.

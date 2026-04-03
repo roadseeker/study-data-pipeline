@@ -16,7 +16,8 @@ Documents in this folder are portfolio-grade consulting deliverables, not casual
 
 - Write in a professional consulting tone.
 - Keep structure clear: scenario, objective, architecture, steps, validation, expected outcomes.
-- Use realistic PayNex examples and business terminology.
+- Use realistic Nexus Pay examples and business terminology.
+- Use `nexuspay` / `NexusPay` machine-readable identifiers consistently in topics, file names, package names, DAG IDs, and example assets.
 - Preserve consistency with the repository layout and actual filenames.
 - If implementation changes affect docs, update the relevant guides and operations notes.
 

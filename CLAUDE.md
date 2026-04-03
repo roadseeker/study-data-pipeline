@@ -13,7 +13,7 @@ The business target: mid-sized Korean companies in finance, fintech, and manufac
 
 **Phase 1 — Capability Completion (Months 1–4, full-time)**
 
-Domain A pipeline practice is structured as an 8-week program using a fictional fintech company "PayNex" as the scenario. The current branch `week1-pipeline-foundation` corresponds to **Week 1: environment setup**.
+Domain A pipeline practice is structured as an 8-week program using a fictional fintech company "Nexus Pay" as the scenario. The current branch `week1-pipeline-foundation` corresponds to **Week 1: environment setup**.
 
 | Week | Topic | Status |
 |------|-------|--------|
@@ -91,10 +91,10 @@ pipeline-lab/
 │   ├── migration/              # Week 6: jdbc_full_export.py, cdc_to_delta.py
 │   └── orchestration/         # Week 7: master_refresh.py
 ├── flink-jobs/                 # Week 4 Java-based stream processing
-│   └── src/main/java/com/paynex/flink/
+│   └── src/main/java/com/nexuspay/flink/
 │       ├── job/                # TransactionAggregationJob, FraudDetectionJob
 │       ├── function/           # Aggregation, window, fraud detection functions
-│       ├── model/              # PaynexEvent, AggregatedResult, FraudAlert POJOs
+│       ├── model/              # NexusPayEvent, AggregatedResult, FraudAlert POJOs
 │       └── util/               # Deserializer, config util, exactly-once sink builder
 └── data/
     ├── sample/
@@ -119,8 +119,8 @@ pipeline-lab/
 
 ## Key Conventions
 
-### PayNex Scenario
-All pipeline practice is framed around a fictional fintech company "PayNex" data modernization PoC. Each week has a specific stakeholder scenario (CTO, CFO, COO, CIO) that drives the requirements. Deliverables should be proposal-quality.
+### Nexus Pay Scenario
+All pipeline practice is framed around a fictional fintech company "Nexus Pay" data modernization PoC. Each week has a specific stakeholder scenario (CTO, CFO, COO, CIO) that drives the requirements. Deliverables should be proposal-quality.
 
 ### Git Branch Convention
 Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
@@ -136,7 +136,7 @@ Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
 - **Gold**: Business aggregates (daily_summary, customer_stats, fee_settlement)
 
 ### Kafka Topic Naming
-Format: `<domain>.<entity>.<event>` (e.g., `paynex.events.ingested`)
+Format: `<domain>.<entity>.<event>` (e.g., `nexuspay.events.ingested`)
 
 ### Redis License Note
 Redis 8 added AGPLv3 after 2025-05-01. Use Redis 7 in this lab to avoid license complications.

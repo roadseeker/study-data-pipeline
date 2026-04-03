@@ -10,7 +10,7 @@
 
 ### 배경 설정
 
-가상의 중견 핀테크 기업 **"페이넥스(PayNex)"** 가 데이터 파이프라인 현대화를 검토 중이다. 컨설턴트로서 PoC(Proof of Concept) 환경을 로컬에 구축하여 전체 Apache 오픈소스 스택이 정상적으로 작동하는지 검증해야 한다. 이 환경은 이후 8주간의 모든 실습의 기반이 된다.
+가상의 핀테크 서비스 **"Nexus Pay"** 는 안정적이고 확장 가능한 결제 플랫폼을 목표로 하는 MSA 기반 Payment Service다. 컨설턴트이자 데이터 파이프라인 담당 역할로서 PoC(Proof of Concept) 환경을 로컬에 구축하여 전체 Apache 오픈소스 스택이 정상적으로 작동하는지 검증해야 한다. 이 환경은 이후 8주간의 모든 실습의 기반이 된다.
 
 ### 목표
 
@@ -789,13 +789,13 @@ bash scripts/healthcheck-all.sh
 
 파이프라인 토픽을 만들고, 샘플 거래 데이터를 프로듀싱한 뒤, 컨슈머로 확인한다.
 
-> **참고**: 아래 `paynex-transactions` 토픽은 연동 검증 목적의 **임시 토픽**이다. Week 2에서 정식 명명 규칙(`<도메인>.<엔티티>.<이벤트유형>`, 점 구분자)에 따라 `paynex.transactions.payment` 등으로 재생성하며, 이 토픽은 삭제할 예정이다.
+> **참고**: 아래 `nexuspay-transactions` 토픽은 연동 검증 목적의 **임시 토픽**이다. Week 2에서 정식 명명 규칙(`<도메인>.<엔티티>.<이벤트유형>`, 점 구분자)에 따라 `nexuspay.transactions.payment` 등으로 재생성하며, 이 토픽은 삭제할 예정이다.
 
 ```bash
 # 실습용 임시 토픽 생성 (Week 2에서 정식 토픽으로 교체 예정)
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --create --topic paynex-transactions \
+  --create --topic nexuspay-transactions \
   --partitions 3 \
   --replication-factor 1'
 
@@ -804,13 +804,13 @@ for i in $(seq 1 10); do
   echo "{\"tx_id\":$i,\"user_id\":$((RANDOM % 1000)),\"amount\":$((RANDOM % 5000000 + 10000)),\"type\":\"PAYMENT\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" | \
   docker exec -i lab-kafka sh -c '/opt/kafka/bin/kafka-console-producer.sh \
     --bootstrap-server localhost:9092 \
-    --topic paynex-transactions'
+    --topic nexuspay-transactions'
 done
 
 # 컨슈머로 수신 확인
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic paynex-transactions \
+  --topic nexuspay-transactions \
   --from-beginning \
   --max-messages 10'
 ```
@@ -852,7 +852,7 @@ docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 # 현재 토픽 상태 확인
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
-  --describe --topic paynex-transactions'
+  --describe --topic nexuspay-transactions'
 
 # Kafka 컨테이너 강제 중단
 docker stop lab-kafka
@@ -871,7 +871,7 @@ docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
 # 기존 메시지 보존 확인
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic paynex-transactions \
+  --topic nexuspay-transactions \
   --from-beginning \
   --max-messages 10'
 # 기대: 이전에 프로듀스한 10건 그대로 존재
@@ -925,7 +925,7 @@ curl -s http://localhost:8081/overview
 
 | 시나리오 | 중단 대상 | 영향 범위 | 복구 소요 시간 | 데이터 손실 여부 | 비고 |
 |----------|----------|----------|-------------|---------------|------|
-| A | Kafka | Kafka 토픽 조회 및 프로듀스/컨슈머 테스트 일시 중단, 타 서비스는 계속 실행 | 약 30초 | 없음 | `paynex-transactions` 토픽과 기존 메시지 10건 재조회 성공 |
+| A | Kafka | Kafka 토픽 조회 및 프로듀스/컨슈머 테스트 일시 중단, 타 서비스는 계속 실행 | 약 30초 | 없음 | `nexuspay-transactions` 토픽과 기존 메시지 10건 재조회 성공 |
 | B | PostgreSQL | Airflow health endpoint 비정상 전환, metadatabase/scheduler 상태 unhealthy 확인 | 약 30초 | 없음 | PostgreSQL 재기동 후 `scheduler.status=healthy`까지 복구 확인 |
 | C | Flink TaskManager | Flink 슬롯 4개 모두 소실, JobManager overview에서 `taskmanagers=0` 확인 | 약 15초 | 없음 | TaskManager 재기동 후 `taskmanagers=1`, `slots-available=4` 복구 확인 |
 ```
@@ -965,8 +965,8 @@ docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
 ```
 
 Week 2 준비 포인트:
-- `paynex-transactions` 토픽이 정상 동작하는지 이미 확인했다.
-- Week 2에서는 이 토픽을 임시 검증용 자산으로 보고, 정식 명명 규칙 기반 토픽(`paynex.transactions.payment` 등)으로 재구성할 준비를 한다.
+- `nexuspay-transactions` 토픽이 정상 동작하는지 이미 확인했다.
+- Week 2에서는 이 토픽을 임시 검증용 자산으로 보고, 정식 명명 규칙 기반 토픽(`nexuspay.transactions.payment` 등)으로 재구성할 준비를 한다.
 - Git Bash 사용 시 `docker exec ... sh -c '...'` 패턴을 유지한다.
 - `.sh` 파일 줄바꿈 오류 재발 방지를 위해 저장소 루트에 `.gitattributes`를 추가했다.
 
@@ -985,7 +985,7 @@ Week 2 준비 포인트:
 | 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☑ |
 | 6 | 장애 테스트 결과 기록 | ☑ |
 | 7 | README.md (환경 문서) | ☑ |
-| 8 | Git 초기 커밋 | ☐ |
+| 8 | Git 초기 커밋 | ☑ |
 
 ## 포트 맵 요약
 
@@ -1001,4 +1001,4 @@ Week 2 준비 포인트:
 
 ## Week 2 예고
 
-Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `paynex-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
+Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `nexuspay-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
