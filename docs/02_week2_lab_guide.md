@@ -452,24 +452,22 @@ if __name__ == "__main__":
 python scripts/producer_nexuspay.py -n 100 --delay 0.05 --verbose
 
 # 파티션별 메시지 분포 확인
+# Apache Kafka 3.7 이미지에서는 GetOffsetShell 직접 호출보다 kafka-get-offsets.sh 사용을 권장
 echo "=== nexuspay.transactions.payment 파티션별 오프셋 ==="
-docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-run-class.sh \
-  kafka.tools.GetOffsetShell \
-  --broker-list localhost:9092 \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server localhost:9092 \
   --topic nexuspay.transactions.payment'
 
 echo ""
 echo "=== nexuspay.transactions.transfer 파티션별 오프셋 ==="
-docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-run-class.sh \
-  kafka.tools.GetOffsetShell \
-  --broker-list localhost:9092 \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server localhost:9092 \
   --topic nexuspay.transactions.transfer'
 
 echo ""
 echo "=== nexuspay.transactions.withdrawal 파티션별 오프셋 ==="
-docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-run-class.sh \
-  kafka.tools.GetOffsetShell \
-  --broker-list localhost:9092 \
+docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server localhost:9092 \
   --topic nexuspay.transactions.withdrawal'
 ```
 
