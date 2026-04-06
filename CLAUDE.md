@@ -130,6 +130,11 @@ Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
 - Verification scripts follow the pattern `scripts/verify_*.sh` or `scripts/verify_*.py`
 - Documentation in `docs/` mirrors the week structure
 
+### Commit Message Convention
+- When writing or suggesting a git commit command, use a single `-m` option with a multi-line message.
+- Format: summary line, blank line, then flat `- ` bullets for the main changes.
+- The summary should stay short and reflect the real scope of the commit.
+
 ### Delta Lake Medallion Architecture (Week 5+)
 - **Bronze**: Raw ingestion from Kafka/files with idempotent MERGE
 - **Silver**: Cleansed, deduplicated, quality-validated

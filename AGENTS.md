@@ -102,3 +102,9 @@ Use this framing consistently in:
 - Do not rewrite unrelated parts of the repository for style alone.
 - When adding new files, keep them in the directory structure implied by the weekly lab design.
 - If a change affects docs and implementation together, keep them synchronized.
+
+## Commit Message Convention
+
+- When suggesting or writing a git commit command, use a single `-m` option with a multi-line message body.
+- Format commit messages as: first line summary, blank line, then flat `- ` bullets describing the main changes.
+- Keep the summary concise and scoped to the actual change set.
