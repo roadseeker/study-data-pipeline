@@ -7,7 +7,7 @@ import json
 from confluent_kafka import Consumer, OFFSET_BEGINNING, TopicPartition
 
 
-BROKER = "localhost:30092"
+BROKER = "localhost:30092,localhost:30093,localhost:30094"
 TOPIC = "nexuspay.transactions.payment"
 
 

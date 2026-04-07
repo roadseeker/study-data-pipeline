@@ -12,7 +12,7 @@ import argparse
 from confluent_kafka import Consumer, KafkaError
 
 
-BROKER = "localhost:30092"
+BROKER = "localhost:30092,localhost:30093,localhost:30094"
 TOPICS = [
     "nexuspay.transactions.payment",
     "nexuspay.transactions.transfer",

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from confluent_kafka import KafkaException, Producer
 
 
-BROKER = "localhost:30092"
+BROKER = "localhost:30092,localhost:30093,localhost:30094"
 TOPICS = {
     "PAYMENT": "nexuspay.transactions.payment",
     "TRANSFER": "nexuspay.transactions.transfer",
@@ -104,8 +104,8 @@ def verify_broker_connection(producer: Producer, timeout: int = 5) -> str:
         raise RuntimeError(
             "Kafka broker connection failed. "
             f"bootstrap.servers={BROKER}. "
-            "Start the Week 2 broker with `docker compose up -d kafka` "
-            "and verify port 30092 is exposed."
+            "Start the Week 2 brokers with `docker compose up -d kafka-1 kafka-2 kafka-3` "
+            "and verify ports 30092, 30093, 30094 are exposed."
         ) from exc
 
     if not metadata.brokers:
