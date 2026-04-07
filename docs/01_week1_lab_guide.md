@@ -239,8 +239,8 @@ docker-compose.yml의 services 섹션에 추가:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:30092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:30092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -250,7 +250,7 @@ docker-compose.yml의 services 섹션에 추가:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"  # KRaft 클러스터 ID (Week 2 멀티 브로커와 동일)
     ports:
-      - "29092:29092"
+      - "30092:30092"
     networks:
       - pipeline-net
     healthcheck:
@@ -993,7 +993,7 @@ Week 2 준비 포인트:
 |------|--------|
 | 5432 | PostgreSQL |
 | 6379 | Redis |
-| 29092 | Kafka (외부 접속) |
+| 30092 | Kafka (외부 접속) |
 | 8080 | NiFi |
 | 8081 | Flink Dashboard |
 | 8082 | Spark Master UI |
@@ -1002,3 +1002,4 @@ Week 2 준비 포인트:
 ## Week 2 예고
 
 Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `nexuspay-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
+

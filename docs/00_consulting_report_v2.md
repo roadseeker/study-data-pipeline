@@ -801,7 +801,7 @@ pipeline-lab/
 |--------|---------|-----------|----------|
 | PostgreSQL | lab-postgres | 5432 | W1 |
 | Redis | lab-redis | 6379 | W1 |
-| Kafka (3-브로커) | lab-kafka-1/2/3 | 29092/29093/29094 | W1→W2 확장 |
+| Kafka (3-브로커) | lab-kafka-1/2/3 | 30092/30093/30094 | W1→W2 확장 |
 | Apache NiFi | lab-nifi | 8080 | W1 |
 | Flink JobManager | lab-flink-jm | 8081 | W1 |
 | Flink TaskManager | lab-flink-tm | — | W1 |
@@ -913,3 +913,4 @@ pipeline-lab/
 *본 보고서는 2026년 3월 기준 시장 데이터와 기술 역량 분석을 바탕으로 작성되었습니다.*
 
 *주요 출처: 과기정통부·KDATA 「2024 데이터산업현황조사」 / CIO Korea 「2026 IT 전망 조사」 / Deloitte 「2026 TMT 전망 보고서」 / 한국지능정보사회진흥원 「2026년 AI 전망 분석」 / Fortune Business Insights 「AI 컨설팅 서비스 시장 분석」*
+
