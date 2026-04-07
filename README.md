@@ -14,7 +14,7 @@
 |--------|---------|------|------|
 | PostgreSQL 16 | lab-postgres | 5432 | 메타데이터·샘플 DB |
 | Redis 7 | lab-redis | 6379 | 피처 스토어·캐시 |
-| Kafka 3.7 (KRaft) | lab-kafka | 29092 | 실시간 메시징 |
+| Kafka 3.7 (KRaft) | lab-kafka | 30092 | 실시간 메시징 |
 | NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
 | Flink 1.18 | lab-flink-jm / lab-flink-tm | 8081 | 실시간 스트림 처리 |
 | Spark 3.5 (official Apache image) | lab-spark-master / lab-spark-worker | 8082, 7077 | 배치 처리 |
@@ -92,3 +92,4 @@ docker compose down -v
 - Week 2에서는 정식 Kafka 명명 규칙에 따라 `nexuspay.transactions.payment` 등으로 재구성할 예정이다.
 - 브랜드 명칭은 `Nexus Pay`로 통일하고, 기술 식별자는 `nexuspay` / `NexusPay` 규칙을 사용한다.
 - Git Bash 환경에서는 컨테이너 내부 절대경로 명령 실행 시 `docker exec ... sh -c '...'` 형태를 권장한다.
+

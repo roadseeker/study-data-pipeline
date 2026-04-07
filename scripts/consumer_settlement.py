@@ -13,7 +13,7 @@ import argparse
 from collections import defaultdict
 from confluent_kafka import Consumer, KafkaError
 
-BROKER = "localhost:29092"
+BROKER = "localhost:30092"
 TOPICS = [
     "nexuspay.transactions.payment",
     "nexuspay.transactions.transfer",
@@ -75,15 +75,15 @@ def main():
 
         if processed % 50 == 0:
             print_summary(ledger, processed)
-        
-        # 종료 전 최종 집계 출력
-        consumer.commit(asynchronous=False)
-        consumer.close()
-        print("\n" + "=" * 60)
-        print("최종 정산 집계")
-        print_summary(ledger, processed)
-        
-    
+
+    # 종료 전 최종 집계 출력
+    consumer.commit(asynchronous=False)
+    consumer.close()
+    print("\n" + "=" * 60)
+    print("최종 정산 집계")
+    print_summary(ledger, processed)
+
+
 
 def print_summary(ledger, processed):
     """정산 집계 출력"""

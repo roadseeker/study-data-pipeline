@@ -816,7 +816,7 @@ pipeline-lab/
 |--------|---------|-----------|----------|
 | PostgreSQL | lab-postgres | 5432 | W1 |
 | Redis | lab-redis | 6379 | W1 |
-| Kafka (3 brokers) | lab-kafka-1/2/3 | 29092/29093/29094 | W1 to W2 expansion |
+| Kafka (3 brokers) | lab-kafka-1/2/3 | 30092/30093/30094 | W1 to W2 expansion |
 | Apache NiFi | lab-nifi | 8080 | W1 |
 | Flink JobManager | lab-flink-jm | 8081 | W1 |
 | Flink TaskManager | lab-flink-tm | — | W1 |
@@ -928,3 +928,4 @@ The most direct action to take now is to complete the 16-week ML learning schedu
 *This report was prepared based on market data and technical capability analysis as of March 2026.*
 
 *Primary sources: Ministry of Science and ICT and KDATA, "2024 Data Industry Survey" / CIO Korea, "2026 IT Outlook Survey" / Deloitte, "2026 TMT Outlook" / National Information Society Agency, "2026 AI Outlook Analysis" / Fortune Business Insights, "AI Consulting Services Market Analysis"*
+

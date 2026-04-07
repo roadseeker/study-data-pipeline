@@ -1588,7 +1588,7 @@ cat > docs/nifi-architecture.md << 'EOF'
 | 8080 | NiFi 웹 UI |
 | 5050 | 결제 API 시뮬레이터 |
 | 5432 | PostgreSQL |
-| 29092~29094 | Kafka 브로커 1~3 |
+| 30092~30094 | Kafka 브로커 1~3 |
 
 EOF
 ```
@@ -1644,3 +1644,4 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 ## Week 4 예고
 
 Week 4에서는 Flink를 활용한 실시간 스트림 처리를 구축한다. 이번 주에 NiFi가 Kafka에 전달한 `nexuspay.events.ingested` 토픽의 데이터를 Flink가 소비하여 윈도우 집계(Window Aggregation), Watermark 기반 이벤트 타임 처리, 실시간 이상거래 탐지 로직을 구현한다. NiFi(수집) → Kafka(버퍼) → Flink(처리)로 이어지는 실시간 파이프라인의 핵심 구간이 완성된다.
+

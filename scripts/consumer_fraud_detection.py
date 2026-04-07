@@ -12,7 +12,7 @@ import argparse
 from confluent_kafka import Consumer, KafkaError
 
 
-BROKER = "localhost:29092"
+BROKER = "localhost:30092"
 TOPICS = [
     "nexuspay.transactions.payment",
     "nexuspay.transactions.transfer",
@@ -27,6 +27,14 @@ THRESHOLDS = {
 }
 
 running = True
+
+
+def format_partitions(partitions):
+    """리밸런싱 시 할당/회수된 파티션 목록을 읽기 쉽게 포맷한다."""
+    return ", ".join(
+        f"{partition.topic}[{partition.partition}]"
+        for partition in sorted(partitions, key=lambda p: (p.topic, p.partition))
+    )
 
 
 # 현재 코드는 Ctrl+C를 즉시 강제 종료로 처리하지 않고, 종료 플래그를 세운 뒤 루프를 빠져나와 마지막 커밋을 수행하도록 한다. 
@@ -82,6 +90,22 @@ def detect_fraud(tx: dict) -> dict | None:
         }
     return None
 
+
+def on_assign(consumer, partitions):
+    """컨슈머 그룹 리밸런싱 후 새로 할당된 파티션을 출력한다."""
+    print(f"  ↪ 리밸런싱 완료: 할당={format_partitions(partitions)}")
+    consumer.assign(partitions)
+
+
+def on_revoke(consumer, partitions):
+    """리밸런싱 직전에 회수되는 파티션을 출력한다."""
+    print(f"  ↩ 리밸런싱 시작: 회수={format_partitions(partitions)}")
+
+
+def on_lost(consumer, partitions):
+    """예상치 못하게 잃은 파티션을 출력한다."""
+    print(f"  ⚠ 파티션 유실 감지={format_partitions(partitions)}")
+
 def main():
     # 명령행 인자(--instance, --help 등)를 처리할 파서를 만들고,
     # 이 스크립트의 도움말 설명 문구를 "이상거래 탐지 컨슈머"로 설정한다.
@@ -106,7 +130,7 @@ def main():
         "session.timeout.ms": 30000,
     })
 
-    consumer.subscribe(TOPICS)
+    consumer.subscribe(TOPICS, on_assign=on_assign, on_revoke=on_revoke, on_lost=on_lost)
 
     print(f"[이상거래 탐지] 인스턴스 #{args.instance} 시작")
     print(f"  그룹: fraud-detection")
@@ -172,9 +196,10 @@ def main():
         consumer.commit(asynchronous=False) 
 
     consumer.close()
-    print(f"\n최종 결과: 처리 {processed}건, 알림 {alerts}건") 
+    print(f"\n최종 결과: 처리 {processed}건, 알림 {alerts}건")
 
-    # 이 파일을 직접 실행한 경우에만 main() 함수를 호출한다.
-    # 다른 파일에서 import할 때는 main()이 자동 실행되지 않는다.
-    if __name__ == "__main__":
-        main() 
+
+# 이 파일을 직접 실행한 경우에만 main() 함수를 호출한다.
+# 다른 파일에서 import할 때는 main()이 자동 실행되지 않는다.
+if __name__ == "__main__":
+    main()
