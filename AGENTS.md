@@ -127,3 +127,4 @@ Use this framing consistently in:
 - When suggesting or writing a git commit command, use a single `-m` option with a multi-line message body.
 - Format commit messages as: first line summary, blank line, then flat `- ` bullets describing the main changes.
 - Keep the summary concise and scoped to the actual change set.
+- Write commit messages in Korean by default unless the user explicitly requests another language.
