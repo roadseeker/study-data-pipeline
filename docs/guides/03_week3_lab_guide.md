@@ -326,6 +326,9 @@ docker-compose.yml의 services 섹션에 추가:
 
 레거시 정산 시스템이 매시간 CSV 파일을 생성하는 상황을 시뮬레이션한다.
 
+이 생성기는 통화별 현실성을 반영해 `KRW`와 `JPY`는 정수 금액, `USD`는 소수 둘째 자리 금액으로 만들고, 수수료는 총액의 일정 비율(0.3%~3%)로 계산한다.
+생성된 CSV를 확인할 때는 `net_amount = gross_amount - fee_amount` 관계가 유지되는지, `USD` 금액이 수만 달러 수준 이하의 현실적인 범위인지, 상태값이 `COMPLETED`·`PENDING`·`FAILED`로 다양하게 섞여 있는지를 함께 본다.
+
 ```python
 # scripts/nifi/csv_settlement_generator.py
 """
@@ -344,10 +347,39 @@ from datetime import datetime, timezone, timedelta
 OUTPUT_DIR = "./data/settlement"  # pipeline-lab/ 디렉토리에서 실행 기준 (Docker 볼륨 마운트 경로와 일치)
 
 SETTLEMENT_TYPES = ["DAILY_CLOSE", "MERCHANT_PAYOUT", "FEE_CALCULATION", "REFUND_BATCH"]
+CURRENCY_WEIGHTS = [("KRW", 80), ("USD", 15), ("JPY", 5)]
+GROSS_AMOUNT_RANGES = {
+    "KRW": (100_000, 50_000_000),
+    "USD": (100, 50_000),
+    "JPY": (10_000, 5_000_000),
+}
+FEE_RATE_RANGE = (0.003, 0.03)
 
 
 def generate_settlement_row(seq: int, batch_id: str) -> dict:
     """정산 레코드 1건 생성"""
+    currency = random.choices(
+        [item[0] for item in CURRENCY_WEIGHTS],
+        weights=[item[1] for item in CURRENCY_WEIGHTS],
+        k=1,
+    )[0]
+
+    gross_lo, gross_hi = GROSS_AMOUNT_RANGES[currency]
+    gross_raw = random.uniform(gross_lo, gross_hi)
+    if currency in {"KRW", "JPY"}:
+        gross_amount = int(round(gross_raw))
+    else:
+        gross_amount = round(gross_raw, 2)
+
+    fee_rate = random.uniform(*FEE_RATE_RANGE)
+    fee_raw = gross_amount * fee_rate
+    if currency in {"KRW", "JPY"}:
+        fee_amount = int(round(fee_raw))
+        net_amount = gross_amount - fee_amount
+    else:
+        fee_amount = round(fee_raw, 2)
+        net_amount = round(gross_amount - fee_amount, 2)
+
     return {
         # 정산번호를 STL-00000001 같은 형식의 고정 길이 문자열로 만든다.
         "settlement_id": f"STL-{seq:08d}",
@@ -356,11 +388,10 @@ def generate_settlement_row(seq: int, batch_id: str) -> dict:
         "merchant_id": f"MCH-{random.randint(100, 599)}",
         # 목록 안의 값 중 하나를 랜덤 선택
         "settlement_type": random.choice(SETTLEMENT_TYPES),
-        # 시작값과 끝값 사이의 실수 하나를 랜덤 선택
-        "gross_amount": round(random.uniform(100000, 50000000), 2),
-        "fee_amount": round(random.uniform(1000, 500000), 2),
-        "net_amount": 0,  # 아래에서 계산
-        "currency": random.choices(["KRW", "USD", "JPY"], weights=[80, 15, 5], k=1)[0],
+        "gross_amount": gross_amount,
+        "fee_amount": fee_amount,
+        "net_amount": net_amount,
+        "currency": currency,
         "tx_count": random.randint(10, 5000),
         "settlement_date": (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d"),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -390,10 +421,6 @@ def generate_csv_file(row_count: int = 50):
     rows = []
     for i in range(1, row_count + 1):
         row = generate_settlement_row(i, batch_id)
-        # 고객이 결제한 총액: gross_amount
-        # Nexus Pay가 서비스 대가로 가져가는 금액: fee_amount
-        # 가맹점에 최종 지급할 금액: net_amount
-        row["net_amount"] = round(row["gross_amount"] - row["fee_amount"], 2)
         rows.append(row)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -438,7 +465,7 @@ if __name__ == "__main__":
 docker compose up -d payment-api
 
 # API 정상 응답 확인
-curl -s http://localhost:5050/api/v1/payments/recent?count=3 | python3 -m json.tool
+curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | jq
 
 # 정산 CSV 디렉토리 생성 (NiFi 컨테이너에서 접근 가능하도록 볼륨 마운트)
 mkdir -p data/settlement
@@ -452,6 +479,42 @@ head -5 data/settlement/settlement_*.csv
 # NiFi 웹 UI 접속 확인
 curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
+
+> **Windows Git Bash에서 `jq` 설치 및 PATH 반영 방법**:
+>
+> 1. `winget install jqlang.jq` 로 설치한다.
+> 2. PowerShell에서 실제 설치 위치를 확인한다.
+>
+> ```powershell
+> Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter jq.exe -ErrorAction SilentlyContinue
+> ```
+>
+> 예시 설치 위치:
+>
+> ```text
+> C:\Users\<사용자명>\AppData\Local\Microsoft\WinGet\Packages\jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe\jq.exe
+> ```
+>
+> 3. Git Bash 현재 세션에서만 임시 반영하려면 아래처럼 `PATH`를 추가한다.
+>
+> ```bash
+> export PATH="$PATH:/c/Users/<사용자명>/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe"
+> jq --version
+> ```
+>
+> 4. 이후 새 Git Bash 세션에서도 계속 사용하려면 `~/.bashrc`에 같은 경로를 추가한다.
+>
+> ```bash
+> echo 'export PATH="$PATH:/c/Users/<사용자명>/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe"' >> ~/.bashrc
+> source ~/.bashrc
+> jq --version
+> ```
+>
+> `jq`를 바로 사용할 수 없는 환경에서는 아래 Python 대체 명령을 사용한다.
+>
+> ```bash
+> curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | python -c "import sys, json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
+> ```
 
 > **NiFi 볼륨 마운트 추가**: docker-compose.yml의 nifi 서비스에 정산 CSV 디렉토리와 API 네트워크 접근을 위한 볼륨을 추가한다.
 
@@ -479,6 +542,18 @@ curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi
 ```
 
 **Day 1 완료 기준**: NiFi 핵심 개념 문서 작성, 프로세서 그룹 설계 문서 작성, 결제 API 시뮬레이터 정상 동작, 정산 CSV 생성기 정상 동작, NiFi 웹 UI 접속 확인.
+
+**Day 1 진행 결과 정리**:
+- `docs/nifi/nifi-concepts.md` 작성 완료
+- `config/nifi/process-group-design.md` 작성 완료
+- `scripts/nifi/api_payment_simulator.py` 정상 동작 확인
+  - 검증 예시: `curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | jq`
+- `scripts/nifi/csv_settlement_generator.py` 정상 동작 확인
+  - 검증 예시: `data/settlement/settlement_20260408_135947.csv` 생성
+- NiFi 웹 UI 접근 확인
+  - 검증 예시: `curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"`
+
+위 항목 기준으로 Day 1은 완료로 판단한다. 다만 실제 NiFi 캔버스에서 5개 프로세서 그룹을 모두 구성하는 작업은 Day 2 이후에 계속 진행한다.
 
 ---
 
@@ -624,7 +699,7 @@ API 호출 실패와 변환 실패를 별도로 기록한다.
 
 ```bash
 # API 시뮬레이터 정상 동작 확인
-curl -s http://localhost:5050/api/v1/payments/recent?count=3 | python3 -m json.tool
+curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | jq
 
 # NiFi UI에서:
 # 1. PG-1: API Ingestion 그룹 내 모든 프로세서 시작
@@ -636,7 +711,7 @@ curl -s http://localhost:5050/api/v1/payments/recent?count=3 | python3 -m json.t
 
 ```bash
 # NiFi API로 프로세서 상태 확인 (선택사항 — UI에서도 확인 가능)
-curl -s http://localhost:8080/nifi-api/flow/process-groups/root | python3 -m json.tool | head -30
+curl -s http://localhost:8080/nifi-api/flow/process-groups/root | jq | head -30
 ```
 
 Output Port 직전의 FlowFile Content가 다음 형태로 변환되어야 한다:
@@ -1621,10 +1696,10 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docs/nifi/nifi-concepts.md (NiFi 핵심 개념 정리) | ☐ |
-| 2 | config/nifi/process-group-design.md (프로세서 그룹 설계) | ☐ |
-| 3 | scripts/nifi/api_payment_simulator.py (결제 API 시뮬레이터) | ☐ |
-| 4 | scripts/nifi/csv_settlement_generator.py (정산 CSV 생성기) | ☐ |
+| 1 | docs/nifi/nifi-concepts.md (NiFi 핵심 개념 정리) | ☑ |
+| 2 | config/nifi/process-group-design.md (프로세서 그룹 설계) | ☑ |
+| 3 | scripts/nifi/api_payment_simulator.py (결제 API 시뮬레이터) | ☑ |
+| 4 | scripts/nifi/csv_settlement_generator.py (정산 CSV 생성기) | ☑ |
 | 5 | scripts/nifi/init-customers.sql (고객 마스터 테이블) | ☐ |
 | 6 | config/nifi/jolt-spec-api-payment.json (API Jolt 스펙) | ☐ |
 | 7 | config/nifi/jolt-spec-file-settlement.json (CSV Jolt 스펙) | ☐ |
@@ -1634,7 +1709,7 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 | 11 | docs/provenance-audit-guide.md (Provenance 감사 추적 가이드) | ☐ |
 | 12 | docs/nifi-monitoring-guide.md (NiFi 모니터링 가이드) | ☐ |
 | 13 | docs/nifi-architecture.md (데이터 흐름 아키텍처 문서) | ☐ |
-| 14 | docker-compose.yml 업데이트 (payment-api, NiFi 볼륨) | ☐ |
+| 14 | docker-compose.yml 업데이트 (payment-api, NiFi 볼륨) | ☑ |
 | 15 | NiFi 플로우 (5개 프로세서 그룹 구성 완료) | ☐ |
 | 16 | Git 커밋 | ☐ |
 
@@ -1657,5 +1732,3 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 ## Week 4 예고
 
 Week 4에서는 Flink를 활용한 실시간 스트림 처리를 구축한다. 이번 주에 NiFi가 Kafka에 전달한 `nexuspay.events.ingested` 토픽의 데이터를 Flink가 소비하여 윈도우 집계(Window Aggregation), Watermark 기반 이벤트 타임 처리, 실시간 이상거래 탐지 로직을 구현한다. NiFi(수집) → Kafka(버퍼) → Flink(처리)로 이어지는 실시간 파이프라인의 핵심 구간이 완성된다.
-
-

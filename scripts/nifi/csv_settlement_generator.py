@@ -15,9 +15,38 @@ from datetime import datetime, timedelta, timezone
 OUTPUT_DIR = "./data/settlement" # CSV 파일이 저장될 디렉토리
 
 SETTLEMENT_TYPES = ["DAILY_CLOSE", "MERCHANT_PAYOUT", "FEE_CALCULATION", "REFUND_BATCH"]
+CURRENCY_WEIGHTS = [("KRW", 80), ("USD", 15), ("JPY", 5)]
+GROSS_AMOUNT_RANGES = {
+    "KRW": (100_000, 50_000_000),
+    "USD": (100, 50_000),
+    "JPY": (10_000, 5_000_000),
+}
+FEE_RATE_RANGE = (0.003, 0.03)
 
 def generate_settlement_row(seq: int, batch_id: str) -> dict:
     """정산 레코드 1건 생성"""
+    currency = random.choices(
+        [item[0] for item in CURRENCY_WEIGHTS],
+        weights=[item[1] for item in CURRENCY_WEIGHTS],
+        k=1,
+    )[0]
+
+    gross_lo, gross_hi = GROSS_AMOUNT_RANGES[currency]
+    gross_raw = random.uniform(gross_lo, gross_hi)
+    if currency in {"KRW", "JPY"}:
+        gross_amount = int(round(gross_raw))
+    else:
+        gross_amount = round(gross_raw, 2)
+
+    fee_rate = random.uniform(*FEE_RATE_RANGE)
+    fee_raw = gross_amount * fee_rate
+    if currency in {"KRW", "JPY"}:
+        fee_amount = int(round(fee_raw))
+        net_amount = gross_amount - fee_amount
+    else:
+        fee_amount = round(fee_raw, 2)
+        net_amount = round(gross_amount - fee_amount, 2)
+
     return {
         # 정산번호를 STL-00000001 같은 형식의 고정 길이 문자열로 만든다.
         "settlement_id": f"STL-{seq:08d}",
@@ -26,11 +55,10 @@ def generate_settlement_row(seq: int, batch_id: str) -> dict:
         "merchant_id": f"MCH-{random.randint(100, 599)}",
         # 목록 안의 값 중 하나를 랜덤 선택
         "settlement_type": random.choice(SETTLEMENT_TYPES),
-        # 시작값과 끝값 사이의 실수 하나를 랜덤 선택
-        "gross_amount": round(random.uniform(100000, 50000000), 2),
-        "fee_amount": round(random.uniform(1000, 500000), 2),
-        "net_amount": 0,  # 아래에서 계산
-        "currency": random.choices(["KRW", "USD", "JPY"], weights=[80, 15, 5], k=1)[0],
+        "gross_amount": gross_amount,
+        "fee_amount": fee_amount,
+        "net_amount": net_amount,
+        "currency": currency,
         "tx_count": random.randint(10, 5000),
         "settlement_date": (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d"),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -59,10 +87,6 @@ def generate_csv_file(row_count: int = 50):
     rows = []
     for i in range(1, row_count + 1):
         row = generate_settlement_row(i, batch_id)
-        # 고객이 결제한 총액: gross_amount
-        # Nexus Pay가 서비스 대가로 가져가는 금액: fee_amount
-        # 가맹점에 최종 지급할 금액: net_amount
-        row["net_amount"] = round(row["gross_amount"] - row["fee_amount"], 2)
         rows.append(row)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:

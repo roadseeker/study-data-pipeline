@@ -15,6 +15,7 @@ from flask import Flask, jsonify, request
 # Flask 애플리케이션 객체를 생성한다.
 # __name__을 넘기면 Flask가 현재 파일 기준으로 앱 경로와 실행 문맥을 식별한다.
 app = Flask(__name__)
+app.json.ensure_ascii = False  # JSON 응답에서 한글이 깨지지 않도록 설정
 
 # 시퀀스 카운터 (서버 재시작 시 리셋)
 _seq_counter = 0
