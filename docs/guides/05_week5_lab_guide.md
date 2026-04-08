@@ -3,7 +3,7 @@
 **기간**: 5일 (월~금, 풀타임 40시간)
 **주제**: Spark 배치 ETL 설계, 대용량 파티셔닝 전략, Delta Lake 기반 ACID 저장소 구축, Lambda 아키텍처 배치 레이어 완성
 **산출물**: Spark ETL 코드 + Delta Lake 테이블 + 데이터 품질 검증 파이프라인 + 배치 운영 가이드
-**전제 조건**: Week 1~4 환경 정상 기동 (`bash scripts/healthcheck-all.sh` 전체 통과), Flink 실시간 파이프라인 정상 작동 중
+**전제 조건**: Week 1~4 환경 정상 기동 (`bash scripts/foundation/healthcheck-all.sh` 전체 통과), Flink 실시간 파이프라인 정상 작동 중
 
 ---
 
@@ -2409,3 +2409,4 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 ## Week 6 예고
 
 Week 6에서는 RDBMS → 데이터 레이크 이관 파이프라인을 구축한다. Spark JDBC로 배치 이관(Full/Incremental)을, Debezium CDC(Change Data Capture)로 실시간 이관을 구현한다. 레거시 MySQL/PostgreSQL의 데이터를 Delta Lake로 이관하는 시나리오를 통해 기업 현장에서 가장 빈번하게 발생하는 "레거시 DB 탈출" 프로젝트의 실전 기술을 습득한다.
+

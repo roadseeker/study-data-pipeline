@@ -3,7 +3,7 @@
 **기간**: 5일 (월~금, 풀타임 40시간)
 **주제**: RDBMS → 데이터 레이크 배치 이관(Spark JDBC), 실시간 변경 데이터 캡처(Debezium CDC), 레거시 DB 탈출 전략 수립
 **산출물**: Spark JDBC 배치 이관 파이프라인 + Debezium CDC 실시간 이관 파이프라인 + 이관 전략 가이드 + 데이터 정합성 검증 도구
-**전제 조건**: Week 1~5 환경 정상 기동 (`bash scripts/healthcheck-all.sh` 전체 통과), Delta Lake 메달리온 아키텍처 구축 완료
+**전제 조건**: Week 1~5 환경 정상 기동 (`bash scripts/foundation/healthcheck-all.sh` 전체 통과), Delta Lake 메달리온 아키텍처 구축 완료
 
 ---
 
@@ -1539,3 +1539,4 @@ git commit -m "Week 6: 이관 파이프라인 — Spark JDBC 배치 + Debezium C
 ## Week 7 예고
 
 Week 7에서는 Apache Airflow를 활용한 오케스트레이션 심화 실습을 진행한다. Week 1~6에서 구축한 모든 파이프라인(배치 이관, CDC 모니터링, Spark ETL, 정합성 검증)을 Airflow DAG으로 스케줄링하고, SLA 모니터링·장애 복구·알림 설정을 통해 운영 수준의 파이프라인 오케스트레이션을 완성한다. Day 2에서 만든 배치 이관이 매일 자동으로 실행되고, Day 3의 정합성 검증이 이관 후 자동으로 수행되며, Day 4의 CDC 커넥터 상태가 주기적으로 점검되는 통합 워크플로우를 구현한다.
+

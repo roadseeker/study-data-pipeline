@@ -3,7 +3,7 @@
 **기간**: 5일 (월~금, 풀타임 40시간)
 **주제**: 다중 소스 수집 파이프라인, NiFi 프로세서 그룹, Provenance 추적, Kafka 연동
 **산출물**: NiFi 다중 소스 수집 플로우 + Kafka 연동 파이프라인 + Provenance 모니터링 가이드 + 데이터 흐름 아키텍처 문서
-**전제 조건**: Week 1·2 환경 정상 기동 (`bash scripts/healthcheck-all.sh` 전체 통과), Kafka 3-브로커 클러스터 가동 중
+**전제 조건**: Week 1·2 환경 정상 기동 (`bash scripts/foundation/healthcheck-all.sh` 전체 통과), Kafka 3-브로커 클러스터 가동 중
 
 ---
 
@@ -69,7 +69,7 @@ NiFi를 활용한 컨설팅에서 고객에게 설명해야 하는 핵심 개념
 ```
 
 ```bash
-cat > docs/nifi-concepts.md << 'EOF'
+cat > docs/nifi/nifi-concepts.md << 'EOF'
 # NiFi 핵심 개념 정리 — 컨설팅 설명 자료
 
 ## FlowFile
@@ -180,7 +180,7 @@ EOF
 NiFi의 InvokeHTTP가 호출할 결제 API를 간단한 Flask 서버로 구현한다.
 
 ```python
-# scripts/api_payment_simulator.py
+# scripts/nifi/api_payment_simulator.py
 """
 Nexus Pay 결제 API 시뮬레이터
 - GET /api/v1/payments/recent : 최근 거래 N건 반환
@@ -321,7 +321,7 @@ docker-compose.yml의 services 섹션에 추가:
 레거시 정산 시스템이 매시간 CSV 파일을 생성하는 상황을 시뮬레이션한다.
 
 ```python
-# scripts/csv_settlement_generator.py
+# scripts/nifi/csv_settlement_generator.py
 """
 Nexus Pay 정산 CSV 생성기
 - /data/settlement/ 디렉토리에 주기적으로 CSV 파일 생성
@@ -431,7 +431,7 @@ curl -s http://localhost:5050/api/v1/payments/recent?count=3 | python3 -m json.t
 mkdir -p data/settlement
 
 # CSV 파일 1개 사전 생성 (테스트용)
-python scripts/csv_settlement_generator.py -n 1 -r 20
+python scripts/nifi/csv_settlement_generator.py -n 1 -r 20
 
 # 생성된 파일 확인
 head -5 data/settlement/settlement_*.csv
@@ -813,7 +813,7 @@ EOF
 
 ```bash
 # CSV 파일 3개 생성 (30초 간격)
-python scripts/csv_settlement_generator.py -n 3 -r 30 -i 30
+python scripts/nifi/csv_settlement_generator.py -n 3 -r 30 -i 30
 
 # NiFi UI에서:
 # 1. PG-2: File Ingestion 내 모든 프로세서 시작
@@ -832,7 +832,7 @@ PostgreSQL의 고객 데이터를 증분(Incremental) 방식으로 수집한다.
 **사전 준비 — 고객 마스터 테이블 생성**:
 
 ```sql
--- scripts/init-customers.sql
+-- scripts/nifi/init-customers.sql
 -- PostgreSQL에 고객 마스터 테이블 추가
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -885,7 +885,7 @@ CREATE TRIGGER customers_updated
 
 ```bash
 # 고객 테이블 생성
-docker exec -i lab-postgres psql -U pipeline -d pipeline_db < scripts/init-customers.sql
+docker exec -i lab-postgres psql -U pipeline -d pipeline_db < scripts/nifi/init-customers.sql
 
 # 데이터 확인
 docker exec lab-postgres psql -U pipeline -d pipeline_db \
@@ -1026,7 +1026,7 @@ docker exec lab-postgres psql -U pipeline -d pipeline_db \
 #   PG-3 Output Port: DB 고객 변경분 (60초마다 증분)
 
 # CSV 파일 추가 생성으로 PG-2 트리거
-python scripts/csv_settlement_generator.py -n 2 -r 25 -i 10
+python scripts/nifi/csv_settlement_generator.py -n 2 -r 25 -i 10
 ```
 
 **Day 3 완료 기준**: PG-2 파일 수집 플로우 정상 작동(CSV → JSON 변환, 처리 완료 파일 이동), PG-3 DB 수집 플로우 정상 작동(증분 추출 확인), 세 소스 동시 수집 확인.
@@ -1173,7 +1173,7 @@ Input Port [invalid-data] ──→ PublishKafka_2_6 [DLQ 토픽]
 # 2) 데이터 소스 활성화
 # API: 자동 (30초 주기)
 # CSV: 파일 생성
-python scripts/csv_settlement_generator.py -n 2 -r 30 -i 15
+python scripts/nifi/csv_settlement_generator.py -n 2 -r 30 -i 15
 # DB: 레코드 변경
 docker exec lab-postgres psql -U pipeline -d pipeline_db -c "
   UPDATE customers SET tier = 'GOLD' WHERE user_id BETWEEN 1010 AND 1015;
@@ -1608,11 +1608,11 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docs/nifi-concepts.md (NiFi 핵심 개념 정리) | ☐ |
+| 1 | docs/nifi/nifi-concepts.md (NiFi 핵심 개념 정리) | ☐ |
 | 2 | config/nifi/process-group-design.md (프로세서 그룹 설계) | ☐ |
-| 3 | scripts/api_payment_simulator.py (결제 API 시뮬레이터) | ☐ |
-| 4 | scripts/csv_settlement_generator.py (정산 CSV 생성기) | ☐ |
-| 5 | scripts/init-customers.sql (고객 마스터 테이블) | ☐ |
+| 3 | scripts/nifi/api_payment_simulator.py (결제 API 시뮬레이터) | ☐ |
+| 4 | scripts/nifi/csv_settlement_generator.py (정산 CSV 생성기) | ☐ |
+| 5 | scripts/nifi/init-customers.sql (고객 마스터 테이블) | ☐ |
 | 6 | config/nifi/jolt-spec-api-payment.json (API Jolt 스펙) | ☐ |
 | 7 | config/nifi/jolt-spec-file-settlement.json (CSV Jolt 스펙) | ☐ |
 | 8 | config/nifi/jolt-spec-db-customer.json (DB Jolt 스펙) | ☐ |
@@ -1644,4 +1644,5 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 ## Week 4 예고
 
 Week 4에서는 Flink를 활용한 실시간 스트림 처리를 구축한다. 이번 주에 NiFi가 Kafka에 전달한 `nexuspay.events.ingested` 토픽의 데이터를 Flink가 소비하여 윈도우 집계(Window Aggregation), Watermark 기반 이벤트 타임 처리, 실시간 이상거래 탐지 로직을 구현한다. NiFi(수집) → Kafka(버퍼) → Flink(처리)로 이어지는 실시간 파이프라인의 핵심 구간이 완성된다.
+
 

@@ -21,8 +21,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./scripts/init-customers.sql:/docker-entrypoint-initdb.d/02-init-customers.sql
+      - ./scripts/foundation/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./scripts/nifi/init-customers.sql:/docker-entrypoint-initdb.d/02-init-customers.sql
     networks:
       - pipeline-net
     healthcheck:
@@ -323,3 +323,4 @@ services:
         condition: service_completed_successfully
     networks:
       - pipeline-net
+

@@ -1,5 +1,5 @@
 -- =============================================================
--- scripts/init-db.sql
+-- scripts/foundation/init-db.sql
 -- PostgreSQL 초기화 스크립트 (Week 1 — 실습 환경 구성)
 -- =============================================================
 
@@ -33,3 +33,4 @@ SELECT
     CASE WHEN random() < 0.85 THEN 'COMPLETED' WHEN random() < 0.95 THEN 'PENDING' ELSE 'FAILED' END,
     NOW() - (random() * INTERVAL '30 days')
 FROM generate_series(1, 100);
+

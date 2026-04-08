@@ -3,7 +3,7 @@
 **기간**: 5일 (월~금, 풀타임 40시간)  
 **주제**: Airflow DAG 의존성 관리, 배치/스트리밍 파이프라인 오케스트레이션, SLA 모니터링, 장애 복구·알림 체계 구축  
 **산출물**: Airflow DAG 모음 + 운영 알림 콜백 + 백필/복구 워크플로우 + Airflow 운영 가이드  
-**전제 조건**: Week 1~6 환경 정상 기동 (`bash scripts/healthcheck-all.sh` 전체 통과), Week 5 Spark ETL 및 Week 6 Spark JDBC/CDC 파이프라인 정상 작동
+**전제 조건**: Week 1~6 환경 정상 기동 (`bash scripts/foundation/healthcheck-all.sh` 전체 통과), Week 5 Spark ETL 및 Week 6 Spark JDBC/CDC 파이프라인 정상 작동
 
 ---
 
@@ -934,3 +934,4 @@ git commit -m "Week 7: Airflow orchestration, monitoring, and recovery workflows
 ## Week 8 예고
 
 Week 8에서는 Week 1~7에서 구축한 모든 계층을 통합 검증한다. Kafka·NiFi·Flink·Spark·Spark JDBC·Debezium·Airflow를 하나의 시나리오로 연결하여, 수집 → 변환 → 저장 → 이관 → 오케스트레이션의 전체 데이터 파이프라인을 실제 운영 관점에서 리허설하고 최종 포트폴리오 레포 형태로 정리한다.
+
