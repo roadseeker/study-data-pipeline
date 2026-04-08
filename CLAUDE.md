@@ -142,6 +142,7 @@ Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
 - When writing or suggesting a git commit command, use a single `-m` option with a multi-line message.
 - Format: summary line, blank line, then flat `- ` bullets for the main changes.
 - The summary should stay short and reflect the real scope of the commit.
+- Commit messages should be written in Korean by default unless the user explicitly requests another language.
 
 ### Delta Lake Medallion Architecture (Week 5+)
 - **Bronze**: Raw ingestion from Kafka/files with idempotent MERGE

@@ -294,26 +294,32 @@ docker-compose.yml의 services 섹션에 추가:
   # Nexus Pay 결제 API 시뮬레이터
   # ──────────────────────────────────────
   payment-api:
-    image: python:3.11-slim
+    image: python:3.12-slim
     container_name: lab-payment-api
     working_dir: /app
     command: >
-      bash -c "
-        pip install flask --quiet &&
+      bash -lc "
+        pip install --no-cache-dir flask &&
         python api_payment_simulator.py
       "
     volumes:
-      - ./scripts:/app
+      - ./scripts/nifi:/app
     ports:
       - "5050:5050"
     networks:
       - pipeline-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5050/health || exit 1"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
 ```
 
 ### 1-6. 정산 CSV 생성기 구현
@@ -343,10 +349,14 @@ SETTLEMENT_TYPES = ["DAILY_CLOSE", "MERCHANT_PAYOUT", "FEE_CALCULATION", "REFUND
 def generate_settlement_row(seq: int, batch_id: str) -> dict:
     """정산 레코드 1건 생성"""
     return {
+        # 정산번호를 STL-00000001 같은 형식의 고정 길이 문자열로 만든다.
         "settlement_id": f"STL-{seq:08d}",
         "batch_id": batch_id,
+        # 시작값과 끝값 사이의 정수 하나를 랜덤 선택
         "merchant_id": f"MCH-{random.randint(100, 599)}",
+        # 목록 안의 값 중 하나를 랜덤 선택
         "settlement_type": random.choice(SETTLEMENT_TYPES),
+        # 시작값과 끝값 사이의 실수 하나를 랜덤 선택
         "gross_amount": round(random.uniform(100000, 50000000), 2),
         "fee_amount": round(random.uniform(1000, 500000), 2),
         "net_amount": 0,  # 아래에서 계산
@@ -380,6 +390,9 @@ def generate_csv_file(row_count: int = 50):
     rows = []
     for i in range(1, row_count + 1):
         row = generate_settlement_row(i, batch_id)
+        # 고객이 결제한 총액: gross_amount
+        # Nexus Pay가 서비스 대가로 가져가는 금액: fee_amount
+        # 가맹점에 최종 지급할 금액: net_amount
         row["net_amount"] = round(row["gross_amount"] - row["fee_amount"], 2)
         rows.append(row)
 
