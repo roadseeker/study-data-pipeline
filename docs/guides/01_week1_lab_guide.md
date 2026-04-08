@@ -128,8 +128,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./scripts/init-customers.sql:/docker-entrypoint-initdb.d/02-init-customers.sql
+      - ./scripts/foundation/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./scripts/nifi/init-customers.sql:/docker-entrypoint-initdb.d/02-init-customers.sql
     networks:
       - pipeline-net
     healthcheck:
@@ -161,7 +161,7 @@ services:
 ### 1-4. PostgreSQL 초기화 스크립트
 
 ```sql
--- scripts/init-db.sql
+-- scripts/foundation/init-db.sql
 -- Airflow 메타데이터 DB
 CREATE DATABASE airflow_db;
 
@@ -700,7 +700,7 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 ```bash
 #!/bin/bash
-# scripts/healthcheck-all.sh
+# scripts/foundation/healthcheck-all.sh
 # 전체 환경 헬스체크 스크립트
 
 echo "============================================"
@@ -755,8 +755,8 @@ echo "============================================"
 ```
 
 ```bash
-chmod +x scripts/healthcheck-all.sh
-bash scripts/healthcheck-all.sh
+chmod +x scripts/foundation/healthcheck-all.sh
+bash scripts/foundation/healthcheck-all.sh
 ```
 
 기대 출력:
@@ -941,7 +941,7 @@ Week 1 기준 환경 문서는 저장소 루트의 [README.md](/c:/Users/roadsee
 
 - 아키텍처 개요: `수집(Kafka·NiFi) → 변환(Flink·Spark) → 저장(PostgreSQL·Redis) → 오케스트레이션(Airflow)`
 - 서비스 구성: 컨테이너명, 포트, 역할
-- 빠른 시작: `docker compose up -d`, `bash scripts/healthcheck-all.sh`
+- 빠른 시작: `docker compose up -d`, `bash scripts/foundation/healthcheck-all.sh`
 - 접속 정보: NiFi, Flink, Spark, Airflow URL 및 계정
 - 프로젝트 구조: `dags/`, `docs/`, `scripts/`, `spark-etl/`, `spark-jobs/`, `flink-jobs/`, `data/`
 - 종료 및 초기화: `docker compose down`, `docker compose down -v`
@@ -957,7 +957,7 @@ Week 1 기준 환경 문서는 저장소 루트의 [README.md](/c:/Users/roadsee
 
 ```bash
 # 전체 환경 최종 검증
-bash scripts/healthcheck-all.sh
+bash scripts/foundation/healthcheck-all.sh
 
 # Week 2 준비: Kafka 토픽 검증 상태 확인
 docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-topics.sh \
@@ -980,8 +980,8 @@ Week 2 준비 포인트:
 |---|--------|------|
 | 1 | docker-compose.yml (7개 서비스 정의) | ☑ |
 | 2 | .env 환경 변수 파일 | ☑ |
-| 3 | scripts/init-db.sql (PostgreSQL 초기화) | ☑ |
-| 4 | scripts/healthcheck-all.sh (통합 헬스체크) | ☑ |
+| 3 | scripts/foundation/init-db.sql (PostgreSQL 초기화) | ☑ |
+| 4 | scripts/foundation/healthcheck-all.sh (통합 헬스체크) | ☑ |
 | 5 | dags/healthcheck_dag.py (Airflow 검증 DAG) | ☑ |
 | 6 | 장애 테스트 결과 기록 | ☑ |
 | 7 | README.md (환경 문서) | ☑ |
@@ -1002,4 +1002,5 @@ Week 2 준비 포인트:
 ## Week 2 예고
 
 Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `nexuspay-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
+
 

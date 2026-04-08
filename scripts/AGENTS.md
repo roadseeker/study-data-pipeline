@@ -6,13 +6,12 @@ This file applies to all scripts under `scripts/`.
 
 Scripts in this folder are hands-on lab utilities for setup, simulation, validation, and rehearsal. They should feel operational and demo-ready.
 
-## Scope by Week
+## Folder Mapping
 
-- Week 1: initialization and full-stack health checks
-- Week 2: Kafka producer, consumer, and partition validation
-- Week 3: API, CSV, and NiFi verification scripts
-- Week 4: Flink event generation, checkpoint monitoring, and verification
-- Week 8: integrated rehearsal and failure-drill automation in `e2e/`
+- `foundation/`: initialization and full-stack health checks
+- `kafka/`: producer, consumer, partition, and replication verification
+- `nifi/`: API, CSV, DB, and NiFi ingestion support scripts
+- `e2e/`: integrated rehearsal and failure-drill automation
 
 ## Rules
 
@@ -23,3 +22,4 @@ Scripts in this folder are hands-on lab utilities for setup, simulation, validat
 - Keep scripts easy to run locally in the lab environment.
 - Avoid mixing unrelated weekly concerns in one script unless it is intentionally an integration or rehearsal script.
 - When adding a verification script, favor names like `verify_*.sh` or `verify_*.py`.
+- Place new scripts by domain responsibility rather than by week number.

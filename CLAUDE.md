@@ -76,12 +76,18 @@ pipeline-lab/
 ├── dags/                       # Airflow DAG files
 ├── plugins/                    # Airflow alerting plugin (Slack/email)
 ├── docs/
-│   ├── 00_consulting_report_v2.md   # Business strategy report (Korean)
-│   ├── 00_consulting_report_en.md   # Business strategy report (English)
-│   ├── 01_week1_lab_guide.md
-│   ├── ...08_week8_lab_guide.md
-│   └── final/                  # Acceptance test reports, architecture docs
-├── scripts/                    # Health checks, producers, simulators, verification
+│   ├── guides/                 # 01~08 weekly lab guides
+│   ├── foundation/             # Week 1 docs and shared platform docs
+│   ├── kafka/                  # Kafka architecture and operations docs
+│   ├── nifi/                   # NiFi concept and ingestion docs
+│   ├── flink/                  # Flink docs
+│   ├── spark/                  # Spark and migration docs
+│   ├── airflow/                # Airflow docs
+│   └── reports/                # Consulting reports and cross-week reports
+├── scripts/
+│   ├── foundation/             # Health checks and base DB init scripts
+│   ├── kafka/                  # Kafka producers, consumers, verification
+│   ├── nifi/                   # NiFi simulators and ingestion helpers
 │   └── e2e/                    # End-to-end rehearsal scripts (Week 8)
 ├── spark-etl/                  # Week 5 Medallion ETL (Bronze→Silver→Gold)
 │   ├── config/                 # etl_config.yaml, quality_rules.yaml
@@ -128,7 +134,9 @@ Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
 ### Deliverable Standards
 - Each week produces production-quality artifacts: code, shell verification scripts, and architecture/operations documentation
 - Verification scripts follow the pattern `scripts/verify_*.sh` or `scripts/verify_*.py`
-- Documentation in `docs/` mirrors the week structure
+- Weekly lab guides live in `docs/guides/`
+- Deliverable documents and scripts live in domain folders such as `docs/kafka/`, `docs/nifi/`, `scripts/kafka/`, and `scripts/nifi/`
+- New artifacts should be filed by domain responsibility, not by week number
 
 ### Commit Message Convention
 - When writing or suggesting a git commit command, use a single `-m` option with a multi-line message.

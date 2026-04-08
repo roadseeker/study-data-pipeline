@@ -14,7 +14,7 @@
 |--------|---------|------|------|
 | PostgreSQL 16 | lab-postgres | 5432 | 메타데이터·샘플 DB |
 | Redis 7 | lab-redis | 6379 | 피처 스토어·캐시 |
-| Kafka 3.7 (KRaft) | lab-kafka | 30092 | 실시간 메시징 |
+| Kafka 3.7 (KRaft) | lab-kafka-1 / lab-kafka-2 / lab-kafka-3 | 30092, 30093, 30094 | 실시간 메시징 |
 | NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
 | Flink 1.18 | lab-flink-jm / lab-flink-tm | 8081 | 실시간 스트림 처리 |
 | Spark 3.5 (official Apache image) | lab-spark-master / lab-spark-worker | 8082, 7077 | 배치 처리 |
@@ -27,7 +27,7 @@
 docker compose up -d
 
 # 환경 헬스체크
-bash scripts/healthcheck-all.sh
+bash scripts/foundation/healthcheck-all.sh
 ```
 
 ## Week 1 검증 완료 범위
@@ -65,8 +65,19 @@ pipeline-lab/
 │   ├── spark/                  # Spark 설정
 │   └── airflow/                # Airflow 설정
 ├── dags/                       # Airflow DAG 파일
-├── docs/                       # 주차별 랩 가이드
-├── scripts/                    # 헬스체크·DB 초기화 스크립트
+├── docs/
+│   ├── guides/                 # Week 1~8 랩 가이드
+│   ├── foundation/             # 기반 환경 관련 문서
+│   ├── kafka/                  # Kafka 운영·검증 문서
+│   ├── nifi/                   # NiFi 개념·수집 문서
+│   ├── flink/                  # Flink 문서
+│   ├── spark/                  # Spark 및 이관 문서
+│   ├── airflow/                # Airflow 문서
+│   └── reports/                # 컨설팅 보고서 및 교차 주차 리포트
+├── scripts/
+│   ├── foundation/             # 헬스체크·기반 초기화 스크립트
+│   ├── kafka/                  # Kafka producer/consumer/verify 스크립트
+│   └── nifi/                   # NiFi 시뮬레이터·수집 보조 스크립트
 ├── spark-etl/                  # Week 5 배치 ETL 코드
 ├── spark-jobs/                 # Week 6~7 이관·오케스트레이션 코드
 ├── flink-jobs/                 # Week 4 Flink 스트림 처리 코드
@@ -92,4 +103,6 @@ docker compose down -v
 - Week 2에서는 정식 Kafka 명명 규칙에 따라 `nexuspay.transactions.payment` 등으로 재구성할 예정이다.
 - 브랜드 명칭은 `Nexus Pay`로 통일하고, 기술 식별자는 `nexuspay` / `NexusPay` 규칙을 사용한다.
 - Git Bash 환경에서는 컨테이너 내부 절대경로 명령 실행 시 `docker exec ... sh -c '...'` 형태를 권장한다.
+- Week 가이드는 `docs/guides/`에, 실제 산출물 문서와 스크립트는 기술 도메인 폴더에 저장한다.
+
 

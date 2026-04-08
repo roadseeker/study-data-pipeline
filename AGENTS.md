@@ -45,12 +45,31 @@ Use this framing consistently in:
 - `docker-compose.yml`: central full-stack lab definition that evolves by week
 - `config/`: architecture configs, schemas, connector definitions, topic conventions
 - `dags/`: Airflow DAGs and orchestration assets
-- `docs/`: consulting report, weekly lab guides, operations docs, final reports
+- `docs/`: consulting reports, weekly lab guides, domain-specific operations and architecture docs
 - `scripts/`: health checks, simulators, verification utilities, rehearsal scripts
 - `spark-etl/`: Week 5 batch ETL and Medallion architecture assets
 - `spark-jobs/`: Week 6 to 7 migration and orchestration jobs
 - `flink-jobs/`: Week 4 Java-based real-time stream processing code
 - `data/`: local sample data, settlement files, Delta Lake outputs
+
+## Artifact Placement Rules
+
+- Weekly lab guides belong under `docs/guides/` and keep the `01_...` to `08_...` naming pattern.
+- Weekly deliverable documents do not stay at the `docs/` root. Store them in the domain folder that matches the stack area:
+  - `docs/foundation/`
+  - `docs/kafka/`
+  - `docs/nifi/`
+  - `docs/flink/`
+  - `docs/spark/`
+  - `docs/airflow/`
+  - `docs/reports/`
+- Weekly script deliverables do not stay at the `scripts/` root. Store them in the matching domain folder:
+  - `scripts/foundation/`
+  - `scripts/kafka/`
+  - `scripts/nifi/`
+  - add other domain folders later only when that week produces executable assets
+- When a new week adds a document or script, place it by domain and responsibility, not by week number.
+- If a week guide references an artifact, update the guide path at the same time as the file move.
 
 ## Working Rules
 

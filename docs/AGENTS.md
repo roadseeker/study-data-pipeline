@@ -6,11 +6,12 @@ This file applies to all documentation under `docs/`.
 
 Documents in this folder are portfolio-grade consulting deliverables, not casual notes. They should read as materials that can be shown to technical stakeholders, customers, or evaluators.
 
-## Week Mapping
+## Folder Mapping
 
-- `00_consulting_report_*.md`: business strategy and commercialization context
-- `01_week1_lab_guide.md` to `08_week8_lab_guide.md`: weekly hands-on lab guides
-- `final/`: Week 8 acceptance-test and final architecture deliverables
+- `reports/`: business strategy and commercialization context, cross-week reports
+- `guides/`: `01_week1_lab_guide.md` to `08_week8_lab_guide.md`
+- `foundation/`: base environment and shared platform docs
+- `kafka/`, `nifi/`, `flink/`, `spark/`, `airflow/`: domain deliverables and operations docs
 
 ## Writing Rules
 
@@ -20,6 +21,7 @@ Documents in this folder are portfolio-grade consulting deliverables, not casual
 - Use `nexuspay` / `NexusPay` machine-readable identifiers consistently in topics, file names, package names, DAG IDs, and example assets.
 - Preserve consistency with the repository layout and actual filenames.
 - If implementation changes affect docs, update the relevant guides and operations notes.
+- Keep weekly lab guides in `docs/guides/`, but place real deliverable documents in the domain folder that matches the technology area.
 
 ## Weekly Guidance
 

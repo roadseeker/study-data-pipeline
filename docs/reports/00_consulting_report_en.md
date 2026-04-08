@@ -485,8 +485,8 @@ Five-day schedule:
 Practice artifact composition:
 
 - `docker-compose.yml` and `.env`: full practice environment definition for Kafka, NiFi, Flink, Spark, Airflow, Redis, and PostgreSQL
-- `scripts/init-db.sql`: PostgreSQL initial schema and sample data loading
-- `scripts/healthcheck-all.sh` and `dags/healthcheck_dag.py`: integrated health checks and Airflow-based environment validation automation
+- `scripts/foundation/init-db.sql`: PostgreSQL initial schema and sample data loading
+- `scripts/foundation/healthcheck-all.sh` and `dags/healthcheck_dag.py`: integrated health checks and Airflow-based environment validation automation
 - `README.md`: local startup procedure, port map, and basic failure-response guide
 
 #### Week 2
@@ -504,9 +504,9 @@ Five-day schedule:
 Practice artifact composition:
 
 - `config/kafka/topic-naming-convention.md` and `config/kafka/topic-configs.md`: topic design criteria and operating settings draft
-- `scripts/partition-calculator.sh` and `scripts/producer_nexuspay.py`: partition estimation and transaction event producer
-- `scripts/verify_partition_key.py`, `scripts/consumer_fraud_detection.py`, and `scripts/consumer_settlement.py`: partition key validation and multi-consumer-group practice
-- `docker-compose.yml` updates, `docs/fault-tolerance-report.md`, and `docs/kafka-operations-guide.md`: three-broker cluster and operational documentation for fault tolerance
+- `scripts/kafka/partition-calculator.sh` and `scripts/kafka/producer_nexuspay.py`: partition estimation and transaction event producer
+- `scripts/kafka/verify_partition_key.py`, `scripts/kafka/consumer_fraud_detection.py`, and `scripts/kafka/consumer_settlement.py`: partition key validation and multi-consumer-group practice
+- `docker-compose.yml` updates, `docs/kafka/fault-tolerance-report.md`, and `docs/kafka/kafka-operations-guide.md`: three-broker cluster and operational documentation for fault tolerance
 
 #### Week 3
 
@@ -522,7 +522,7 @@ Five-day schedule:
 
 Practice artifact composition:
 
-- `scripts/api_payment_simulator.py`, `scripts/csv_settlement_generator.py`, and `scripts/init-customers.sql`: API, file, and DB source data generation and initialization
+- `scripts/nifi/api_payment_simulator.py`, `scripts/nifi/csv_settlement_generator.py`, and `scripts/nifi/init-customers.sql`: API, file, and DB source data generation and initialization
 - `config/nifi/process-group-design.md` and `config/nifi/jolt-spec-*.json`: NiFi processor-group design and source-specific standardization rules
 - `config/nifi/nexuspay-standard-schema.avsc` and `scripts/verify_nifi_pipeline.sh`: common event schema and integrated verification script
 - `docs/provenance-audit-guide.md`, `docs/nifi-monitoring-guide.md`, and `docs/nifi-architecture.md`: lineage tracking, monitoring, and architecture documentation
@@ -928,4 +928,5 @@ The most direct action to take now is to complete the 16-week ML learning schedu
 *This report was prepared based on market data and technical capability analysis as of March 2026.*
 
 *Primary sources: Ministry of Science and ICT and KDATA, "2024 Data Industry Survey" / CIO Korea, "2026 IT Outlook Survey" / Deloitte, "2026 TMT Outlook" / National Information Society Agency, "2026 AI Outlook Analysis" / Fortune Business Insights, "AI Consulting Services Market Analysis"*
+
 

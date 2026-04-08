@@ -1,5 +1,5 @@
 -- =============================================================
--- scripts/init-customers.sql
+-- scripts/nifi/init-customers.sql
 -- 고객 테이블 초기화 스크립트 (Week 1 — 실습 환경 구성)
 -- =============================================================
 
@@ -44,3 +44,4 @@ CREATE INDEX idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX idx_transactions_created_at ON transactions(created_at);
 CREATE INDEX idx_customers_user_id ON customers(user_id);
 CREATE INDEX idx_customers_grade ON customers(grade);
+

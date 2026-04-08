@@ -9,10 +9,10 @@ set -euo pipefail
 #
 # Defaults reflect the Week 2 lab assumptions documented in:
 #   - config/kafka/partition-sizing-guide.md
-#   - docs/02_week2_lab_guide.md
+#   - docs/guides/02_week2_lab_guide.md
 #
 # All values can be overridden through environment variables, for example:
-#   AVG_MSG_PER_SEC=80 FRAUD_CONSUMERS=4 bash scripts/partition-calculator.sh
+#   AVG_MSG_PER_SEC=80 FRAUD_CONSUMERS=4 bash scripts/kafka/partition-calculator.sh
 
 AVG_MSG_PER_SEC="${AVG_MSG_PER_SEC:-50}"
 SINGLE_PARTITION_THROUGHPUT="${SINGLE_PARTITION_THROUGHPUT:-10}"
@@ -90,3 +90,4 @@ echo "  nexuspay.transactions.transfer    : ${POC_TRANSFER_PARTITIONS}"
 echo "  nexuspay.transactions.withdrawal  : ${POC_WITHDRAWAL_PARTITIONS}"
 echo "  nexuspay.transactions.dlq         : ${DLQ_PARTITIONS}"
 echo "============================================"
+
