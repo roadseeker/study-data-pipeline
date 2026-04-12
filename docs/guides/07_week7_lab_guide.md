@@ -133,7 +133,36 @@ RUN pip install --no-cache-dir \
 DOCKERFILE
 ```
 
-### 1-5. docker-compose.yml의 Airflow 서비스 보강
+### 1-5. Airflow 볼륨 생성 가이드
+
+Week 7부터는 DAG, 플러그인, 운영 로그를 장기간 유지해야 하므로 Airflow 서비스 보강 전에 관련 경로를 먼저 준비한다. Airflow 자체 컨테이너는 bind mount 중심으로 운영하고, 메타데이터는 PostgreSQL이 영속 저장을 담당한다고 가정한다.
+
+먼저 호스트 디렉터리를 생성한다.
+
+```bash
+mkdir -p dags/utils plugins logs/airflow docs
+mkdir -p scripts/airflow
+```
+
+Airflow 서비스에는 최소 아래 볼륨을 유지한다.
+
+```yaml
+  airflow-webserver:
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./spark-etl:/opt/airflow/spark-etl
+      - ./spark-jobs:/opt/airflow/spark-jobs
+      - ./data:/data
+      - ./logs/airflow:/opt/airflow/logs
+```
+
+적용 시점:
+- Day 1 Airflow 환경 확장 전에 반영
+- 운영 로그는 `logs/airflow`에서 누적 관리
+- 별도 Airflow 전용 메타DB를 도입할 때만 추가 named volume을 검토
+
+### 1-6. docker-compose.yml의 Airflow 서비스 보강
 
 기존 Week 1 Airflow 서비스를 아래와 같이 보강한다.
 
@@ -934,4 +963,3 @@ git commit -m "Week 7: Airflow orchestration, monitoring, and recovery workflows
 ## Week 8 예고
 
 Week 8에서는 Week 1~7에서 구축한 모든 계층을 통합 검증한다. Kafka·NiFi·Flink·Spark·Spark JDBC·Debezium·Airflow를 하나의 시나리오로 연결하여, 수집 → 변환 → 저장 → 이관 → 오케스트레이션의 전체 데이터 파이프라인을 실제 운영 관점에서 리허설하고 최종 포트폴리오 레포 형태로 정리한다.
-

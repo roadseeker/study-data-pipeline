@@ -1,0 +1,29 @@
+[
+  {
+    "operation": "shift",
+    "spec": {
+      "event_id": "event_id",
+      "event_type": "event_type",
+      "user_id": "user_id",
+      "amount": "amount",
+      "currency": "currency",
+      "merchant": {
+        "id": "merchant_id",
+        "name": "merchant_name",
+        "category": "merchant_category"
+      },
+      "channel": "channel",
+      "status": "status",
+      "is_suspicious": "is_suspicious",
+      "timestamp": "event_timestamp",
+      "source": "data_source"
+    }
+  },
+  {
+    "operation": "default",
+    "spec": {
+      "schema_version": "1.0",
+      "ingested_at": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'', 'UTC')}"
+    }
+  }
+]

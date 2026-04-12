@@ -84,7 +84,7 @@ REDIS_PASSWORD=redis
 
 # === NiFi ===
 NIFI_USERNAME=admin
-NIFI_PASSWORD=nifi
+NIFI_PASSWORD=1q2w3e4r5t1!
 
 # === Airflow ===
 AIRFLOW_ADMIN_USERNAME=admin
@@ -268,23 +268,26 @@ docker-compose.yml의 services 섹션에 추가:
   # NiFi — 데이터 수집·라우팅
   # ──────────────────────────────────────
   nifi:
-    image: apache/nifi:1.25.0
+    image: apache/nifi:2.9.0
     container_name: lab-nifi
     environment:
-      NIFI_WEB_HTTP_PORT: 8080
+      NIFI_WEB_HTTPS_PORT: 8443
+      NIFI_WEB_PROXY_HOST: localhost:8443
       SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
       SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
     ports:
-      - "8080:8080"
+      - "8443:8443"
     networks:
       - pipeline-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://$${HOSTNAME}:8080/nifi/ || exit 1"]
+      test: ["CMD-SHELL", "curl -skf https://localhost:8443/nifi/ || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 15
       start_period: 60s
 ```
+
+> **새 학습 환경 원칙**: NiFi 2.9.0 실습은 예전 1.x `nifi-conf` 볼륨을 재사용하지 않는다. 기존 NiFi 학습 흔적이 있으면 `pipeline-lab_nifi-conf`, `pipeline-lab_nifi-state`, `pipeline-lab_nifi-database-repo`, `pipeline-lab_nifi-flowfile-repo`, `pipeline-lab_nifi-content-repo`, `pipeline-lab_nifi-provenance-repo`, `pipeline-lab_nifi-logs`를 먼저 삭제한 뒤 새로 기동한다.
 
 ### 2-3. Kafka 기동 및 검증
 
@@ -337,10 +340,10 @@ docker compose up -d nifi
 docker logs -f lab-nifi 2>&1 | grep -i "started"
 
 # 웹 UI 접속 확인
-curl -sf http://localhost:8080/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
+curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
 
-브라우저에서 `http://localhost:8080/nifi/` 접속한다. 최초 접속 시 로그인 화면이 나타나면 `admin / nifi`로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
+브라우저에서 `https://localhost:8443/nifi/` 접속한다. 최초 접속 시 self-signed 인증서 경고가 나타나면 예외를 허용한 뒤 진행한다. 로그인 화면이 나타나면 `.env`의 `NIFI_USERNAME / NIFI_PASSWORD` 값으로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
 
 **NiFi 기본 검증 플로우 생성 (UI에서 수행)**:
 
@@ -740,7 +743,7 @@ check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
 echo ""
 echo "[메시징·수집]"
 check "Kafka" "docker exec ${KAFKA_CONTAINER} sh -c '/opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list'"
-check "NiFi" "curl -sf http://localhost:8080/nifi/"
+check "NiFi" "curl -skf https://localhost:8443/nifi/"
 
 echo ""
 echo "[처리·오케스트레이션]"
@@ -1002,5 +1005,3 @@ Week 2 준비 포인트:
 ## Week 2 예고
 
 Week 2에서는 이 환경 위에서 Kafka 심화 실습을 진행한다. 토픽 설계 전략, 파티션 키 기반 메시지 라우팅, 컨슈머 그룹 관리, 오프셋 수동 커밋, 복제 설정 등을 다룬다. Day 4에서 만든 `nexuspay-transactions` 토픽을 확장하여 실제 금융 거래 시나리오를 구현한다.
-
-
