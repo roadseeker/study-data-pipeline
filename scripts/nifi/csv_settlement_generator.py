@@ -12,7 +12,7 @@ import time
 import argparse
 from datetime import datetime, timedelta, timezone
 
-OUTPUT_DIR = "./data/settlement" # CSV 파일이 저장될 디렉토리
+OUTPUT_DIR = "./data/nifi/settlement"  # CSV 파일이 저장될 디렉토리
 
 SETTLEMENT_TYPES = ["DAILY_CLOSE", "MERCHANT_PAYOUT", "FEE_CALCULATION", "REFUND_BATCH"]
 CURRENCY_WEIGHTS = [("KRW", 80), ("USD", 15), ("JPY", 5)]

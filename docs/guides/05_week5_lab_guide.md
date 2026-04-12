@@ -81,6 +81,40 @@ Week 4의 Flink는 실시간으로 흘러오는 무한 스트림을 처리하는
 
 ## Day 1: Spark 핵심 개념 + 프로젝트 셋업
 
+### 1-0. Spark 볼륨 생성 가이드
+
+Week 5부터는 Delta Lake 산출물과 Spark 체크포인트가 핵심 자산이 되므로 Day 1 셋업 시점에 Spark가 읽고 쓸 호스트 경로를 분명히 준비한다. 현재 랩에서는 named volume보다 `./data`와 로그 디렉터리 bind mount를 우선 권장한다.
+
+먼저 호스트 디렉터리를 생성한다.
+
+```bash
+mkdir -p data/delta/etl/{bronze,silver,gold,checkpoints,quality-reports}
+mkdir -p logs/spark
+```
+
+`docker-compose.yml`의 Spark 서비스에는 아래 마운트를 유지하거나 추가한다.
+
+```yaml
+  spark-master:
+    volumes:
+      - ./spark-etl:/opt/spark-etl
+      - ./spark-jobs:/opt/spark-jobs
+      - ./data:/data
+      - ./logs/spark:/opt/spark-events
+
+  spark-worker:
+    volumes:
+      - ./spark-etl:/opt/spark-etl
+      - ./spark-jobs:/opt/spark-jobs
+      - ./data:/data
+      - ./logs/spark:/opt/spark-events
+```
+
+적용 시점:
+- Day 1 프로젝트 셋업 전에 반영
+- `./data` bind mount가 있으면 Delta Lake 산출물은 재기동 후에도 유지
+- Spark History Server를 나중에 붙일 계획이면 `logs/spark`를 미리 쓰는 편이 좋다
+
 ### 1-1. Spark 배치 처리 핵심 개념 정리
 
 컨설팅 현장에서 고객에게 Spark를 설명할 때 사용할 핵심 개념을 정리한다.
@@ -2409,4 +2443,3 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 ## Week 6 예고
 
 Week 6에서는 RDBMS → 데이터 레이크 이관 파이프라인을 구축한다. Spark JDBC로 배치 이관(Full/Incremental)을, Debezium CDC(Change Data Capture)로 실시간 이관을 구현한다. 레거시 MySQL/PostgreSQL의 데이터를 Delta Lake로 이관하는 시나리오를 통해 기업 현장에서 가장 빈번하게 발생하는 "레거시 DB 탈출" 프로젝트의 실전 기술을 습득한다.
-

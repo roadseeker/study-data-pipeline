@@ -247,6 +247,7 @@ REST API를 호출해 데이터를 수집한다.
 - 핵심 기능: 신규 파일 탐지, 읽기 대상 관리, Fetch 후 후속 처리 연결
 - Nexus Pay 예시:
   `/data/settlement/` 경로에 매시간 떨어지는 정산 CSV 파일을 탐지 후 수집
+  호스트 기준 원본 경로는 `./data/nifi/settlement/`
 
 ### 3-3. QueryDatabaseTable
 
