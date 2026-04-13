@@ -289,6 +289,121 @@ docker-compose.yml의 services 섹션에 추가:
 
 > **새 학습 환경 원칙**: NiFi 2.9.0 실습은 예전 1.x `nifi-conf` 볼륨을 재사용하지 않는다. 기존 NiFi 학습 흔적이 있으면 `pipeline-lab_nifi-conf`, `pipeline-lab_nifi-state`, `pipeline-lab_nifi-database-repo`, `pipeline-lab_nifi-flowfile-repo`, `pipeline-lab_nifi-content-repo`, `pipeline-lab_nifi-provenance-repo`, `pipeline-lab_nifi-logs`를 먼저 삭제한 뒤 새로 기동한다.
 
+### 2-2-1. Git Bash 기준 TLS/CA 준비
+
+NiFi 2.9.0은 기본적으로 HTTPS `8443`로 기동한다. `https://localhost:8443/nifi/` 접속 시 브라우저 경고를 줄이고, 실습 중 클라이언트 인증서 선택 창 없이 접속하려면 회사 PC에서 직접 `mkcert` 기반 로컬 CA와 `localhost` 인증서를 준비하는 편이 가장 안정적이다.
+
+**1. `mkcert` 설치 및 로컬 CA 생성**
+
+```bash
+winget install --id FiloSottile.mkcert -e
+mkcert -install
+```
+
+정상 확인:
+
+```bash
+mkcert -CAROOT
+```
+
+**2. `localhost` 인증서 생성**
+
+```bash
+mkdir -p config/nifi/tls
+
+mkcert -cert-file config/nifi/tls/localhost+2.pem \
+  -key-file config/nifi/tls/localhost+2-key.pem \
+  localhost 127.0.0.1 ::1
+```
+
+**3. NiFi용 PKCS#12 keystore / truststore 생성**
+
+```bash
+openssl pkcs12 -export \
+  -inkey config/nifi/tls/localhost+2-key.pem \
+  -in config/nifi/tls/localhost+2.pem \
+  -certfile "$(mkcert -CAROOT)/rootCA.pem" \
+  -out config/nifi/tls/nifi-keystore.p12 \
+  -name nifi-key \
+  -passout pass:changeit
+```
+
+```bash
+openssl pkcs12 -export \
+  -nokeys \
+  -in "$(mkcert -CAROOT)/rootCA.pem" \
+  -out config/nifi/tls/nifi-truststore.p12 \
+  -name nifi-root-ca \
+  -passout pass:changeit
+```
+
+정상 확인:
+
+```bash
+ls -l config/nifi/tls
+```
+
+**4. 왜 클라이언트 인증서 선택 창이 뜨지 않아야 하는가**
+
+현재 저장소의 `config/nifi/start-nifi-2.9.0.sh`는 다음을 자동으로 수행한다.
+
+- `nifi-keystore.p12`, `nifi-truststore.p12`를 NiFi `conf`로 복사
+- `nifi.security.needClientAuth=false`를 `nifi.properties`에 반영
+- `SINGLE_USER_CREDENTIALS_USERNAME`, `SINGLE_USER_CREDENTIALS_PASSWORD`를 적용
+
+즉 정상 기동이라면 브라우저는 서버 인증서만 검증하고, 별도의 클라이언트 인증서를 요구하지 않아야 한다.
+
+기동 후 확인 명령:
+
+```bash
+docker exec lab-nifi sh -lc "grep '^nifi.security.needClientAuth=' /opt/nifi/nifi-current/conf/nifi.properties"
+```
+
+정상 기대값:
+
+```bash
+nifi.security.needClientAuth=false
+```
+
+### 2-2-2. `NIFI_USERNAME`, `NIFI_PASSWORD` 적용 규칙
+
+`.env`에 다음 값을 둔다.
+
+```env
+NIFI_USERNAME=admin
+NIFI_PASSWORD=1q2w3e4r5t1!
+```
+
+`docker-compose.yml`에서는 이를 다음 환경변수로 NiFi 컨테이너에 전달한다.
+
+```yaml
+SINGLE_USER_CREDENTIALS_USERNAME: ${NIFI_USERNAME}
+SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_PASSWORD}
+```
+
+중요한 점은 Docker Compose가 `.env`보다 **현재 셸 환경변수**를 우선한다는 것이다. 따라서 Git Bash 세션에 이미 `NIFI_USERNAME` 또는 `NIFI_PASSWORD`가 잡혀 있으면 `.env` 값이 무시될 수 있다.
+
+실습 전 권장 명령:
+
+```bash
+unset NIFI_USERNAME
+unset NIFI_PASSWORD
+docker compose config | grep -A3 'SINGLE_USER_CREDENTIALS'
+```
+
+기동 후 컨테이너 내부 확인:
+
+```bash
+docker exec lab-nifi sh -lc 'env | grep "^SINGLE_USER_CREDENTIALS_"'
+```
+
+정상 기대값:
+
+```bash
+SINGLE_USER_CREDENTIALS_USERNAME=admin
+SINGLE_USER_CREDENTIALS_PASSWORD=1q2w3e4r5t1!
+```
+
 ### 2-3. Kafka 기동 및 검증
 
 ```bash
@@ -343,7 +458,30 @@ docker logs -f lab-nifi 2>&1 | grep -i "started"
 curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"
 ```
 
-브라우저에서 `https://localhost:8443/nifi/` 접속한다. 최초 접속 시 self-signed 인증서 경고가 나타나면 예외를 허용한 뒤 진행한다. 로그인 화면이 나타나면 `.env`의 `NIFI_USERNAME / NIFI_PASSWORD` 값으로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
+브라우저에서 `https://localhost:8443/nifi/` 접속한다. `mkcert -install`과 `localhost` 인증서를 올바르게 준비했다면 일반적인 서버 인증서 경고 없이 접속할 수 있다. 로그인 화면이 나타나면 `.env`의 `NIFI_USERNAME / NIFI_PASSWORD` 값으로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
+
+만약 브라우저가 `localhost:8443` 접속 시 `인증서 선택` 팝업을 띄우면, 이는 서버가 클라이언트 인증서를 요구하는 상태다. 아래 순서로 확인한다.
+
+```bash
+docker exec lab-nifi sh -lc "grep '^nifi.security.needClientAuth=' /opt/nifi/nifi-current/conf/nifi.properties"
+docker exec lab-nifi sh -lc 'env | grep "^SINGLE_USER_CREDENTIALS_"'
+docker exec lab-nifi sh -lc "grep -n 'Username' /opt/nifi/nifi-current/conf/login-identity-providers.xml"
+```
+
+문제가 있으면 NiFi 볼륨을 삭제한 뒤 재기동한다.
+
+```bash
+docker compose down
+docker volume rm \
+  pipeline-lab_nifi-conf \
+  pipeline-lab_nifi-state \
+  pipeline-lab_nifi-database-repo \
+  pipeline-lab_nifi-flowfile-repo \
+  pipeline-lab_nifi-content-repo \
+  pipeline-lab_nifi-provenance-repo \
+  pipeline-lab_nifi-logs
+docker compose up -d nifi
+```
 
 **NiFi 기본 검증 플로우 생성 (UI에서 수행)**:
 

@@ -23,7 +23,8 @@
     "operation": "default",
     "spec": {
       "schema_version": "1.0",
-      "ingested_at": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'', 'UTC')}"
+      "ingested_at": "${ingested_at}",
+      "source_system": "${source_system}"
     }
   }
 ]
