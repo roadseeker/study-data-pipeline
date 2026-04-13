@@ -12,10 +12,21 @@
     {"name": "merchant_name", "type": ["null", "string"], "default": null},
     {"name": "merchant_category", "type": ["null", "string"], "default": null},
     {"name": "channel", "type": ["null", "string"], "default": null},
-    {"name": "status", "type": "string"},
+    {"name": "status", "type": ["null", "string"], "default": null},
     {"name": "is_suspicious", "type": "boolean", "default": false},
     {"name": "event_timestamp", "type": "string"},
+    {"name": "ingested_at", "type": ["null", "string"], "default": null},
     {"name": "data_source", "type": "string"},
-    {"name": "schema_version", "type": "string", "default": "1.0"}
+    {"name": "schema_version", "type": "string", "default": "1.0"},
+    {"name": "created_at", "type": ["null", "string"], "default": null},
+    {"name": "fee_amount", "type": ["null", "double"], "default": null},
+    {"name": "net_amount", "type": ["null", "double"], "default": null},
+    {"name": "tx_count", "type": ["null", "int"], "default": null},
+    {"name": "batch_id", "type": ["null", "string"], "default": null},
+    {"name": "customer_name", "type": ["null", "string"], "default": null},
+    {"name": "customer_email", "type": ["null", "string"], "default": null},
+    {"name": "customer_phone", "type": ["null", "string"], "default": null},
+    {"name": "customer_grade", "type": ["null", "string"], "default": null},
+    {"name": "is_active", "type": ["null", "boolean"], "default": null}
   ]
 }
