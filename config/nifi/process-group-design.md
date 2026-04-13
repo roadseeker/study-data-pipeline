@@ -192,15 +192,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["InvokeHTTP"] --> B["SplitJson"]
+    A["InvokeHTTP(response)"] --> B["SplitJson"]
     B --> C["EvaluateJsonPath"]
-    C --> D["JoltTransformJSON"]
-    D --> E["UpdateAttribute"]
+    C --> D["UpdateAttribute"]
+    D --> E["JoltTransformJSON"]
     E --> F["Output Port: api-out"]
 ```
 
 ```text
-[InvokeHTTP]
+[InvokeHTTP(response)]
    |
    v
 [SplitJson]
@@ -209,10 +209,10 @@ flowchart LR
 [EvaluateJsonPath]
    |
    v
-[JoltTransformJSON]
+[UpdateAttribute]
    |
    v
-[UpdateAttribute]
+[JoltTransformJSON]
    |
    v
 [Output Port: api-out]
@@ -220,16 +220,18 @@ flowchart LR
 
 주요 Attribute:
 
-- `source_system=payment-api`
+- `source_system=nexuspay-payment-api`
 - `source_type=api`
 - `api_endpoint=/api/v1/payments/recent`
-- `ingest_time`
+- `ingested_at`
 
 설계 포인트:
 
 - 응답 실패는 별도 실패 경로로 분리한다.
+- `InvokeHTTP` 성공 응답 본문은 `response` relationship에서 후속 처리한다.
 - JSON 배열 응답은 `SplitJson`으로 건별 처리한다.
 - `event_id`, `user_id`, `amount`, `currency` 같은 주요 필드를 추출한다.
+- `UpdateAttribute`에서 수집 시각과 소스 시스템 값을 만든 뒤 Jolt에서 표준 스키마에 반영한다.
 
 ### PG-2: File Ingestion
 
