@@ -3,17 +3,14 @@ import groovy.json.JsonOutput
 import org.apache.nifi.processor.io.StreamCallback
 import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 def flowFile = session.get()
 if (!flowFile) return
 
-// Assumption:
-// The PostgreSQL updated_at value is interpreted as UTC.
-// If the source DB stores local Korea time, change SOURCE_ZONE to ZoneId.of("Asia/Seoul").
-def SOURCE_ZONE = ZoneId.of("UTC")
+// The PostgreSQL customers.updated_at value is already stored in UTC.
+// This script only standardizes the string representation to UTC ISO-8601.
 def INPUT_FORMATS = [
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -25,8 +22,8 @@ try {
             inputStream.newReader(StandardCharsets.UTF_8.name())
         )
 
-        if (json.event_timestamp instanceof String) {
-            def rawTimestamp = json.event_timestamp
+        if (json.updated_at instanceof String) {
+            def rawTimestamp = json.updated_at
             LocalDateTime parsed = null
 
             for (formatter in INPUT_FORMATS) {
@@ -39,9 +36,8 @@ try {
             }
 
             if (parsed != null) {
-                json.event_timestamp = parsed
-                    .atZone(SOURCE_ZONE)
-                    .withZoneSameInstant(ZoneOffset.UTC)
+                json.updated_at = parsed
+                    .atZone(ZoneOffset.UTC)
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'"))
             }
         }
