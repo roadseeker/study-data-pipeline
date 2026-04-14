@@ -23,7 +23,7 @@ GROSS_AMOUNT_RANGES = {
 }
 FEE_RATE_RANGE = (0.003, 0.03)
 
-def generate_settlement_row(seq: int, batch_id: str) -> dict:
+def generate_settlement_row(seq: int, batch_id: str, batch_token: str) -> dict:
     """정산 레코드 1건 생성"""
     currency = random.choices(
         [item[0] for item in CURRENCY_WEIGHTS],
@@ -48,8 +48,8 @@ def generate_settlement_row(seq: int, batch_id: str) -> dict:
         net_amount = round(gross_amount - fee_amount, 2)
 
     return {
-        # 정산번호를 STL-00000001 같은 형식의 고정 길이 문자열로 만든다.
-        "settlement_id": f"STL-{seq:08d}",
+        # 파일마다 다시 1번부터 시작해도 겹치지 않도록 배치 고유 토큰을 포함한다.
+        "settlement_id": f"STL-{batch_token}-{seq:06d}",
         "batch_id": batch_id,
         # 시작값과 끝값 사이의 정수 하나를 랜덤 선택
         "merchant_id": f"MCH-{random.randint(100, 599)}",
@@ -73,9 +73,9 @@ def generate_csv_file(row_count: int = 50):
     """정산 CSV 파일 1개 생성"""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    batch_id = f"BATCH-{timestamp}"
-    filename = f"settlement_{timestamp}.csv"
+    batch_token = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    batch_id = f"BATCH-{batch_token}"
+    filename = f"settlement_{batch_token}.csv"
     filepath = os.path.join(OUTPUT_DIR, filename)
 
     fieldnames = [
@@ -86,7 +86,7 @@ def generate_csv_file(row_count: int = 50):
 
     rows = []
     for i in range(1, row_count + 1):
-        row = generate_settlement_row(i, batch_id)
+        row = generate_settlement_row(i, batch_id, batch_token)
         rows.append(row)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:

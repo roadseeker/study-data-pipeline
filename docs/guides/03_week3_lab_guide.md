@@ -161,7 +161,7 @@ cat > config/nifi/process-group-design.md << 'EOF'
   - invalid → Output Port (DLQ로 전달)
 
 ### PG-5: Kafka Publishing (Kafka 전달)
-- Input Port → PublishKafka_2_6
+- Input Port → PublishKafka
   - success → LogAttribute(성공 기록)
   - failure → Retry / DLQ
 
@@ -356,7 +356,7 @@ GROSS_AMOUNT_RANGES = {
 FEE_RATE_RANGE = (0.003, 0.03)
 
 
-def generate_settlement_row(seq: int, batch_id: str) -> dict:
+def generate_settlement_row(seq: int, batch_id: str, batch_token: str) -> dict:
     """정산 레코드 1건 생성"""
     currency = random.choices(
         [item[0] for item in CURRENCY_WEIGHTS],
@@ -381,8 +381,8 @@ def generate_settlement_row(seq: int, batch_id: str) -> dict:
         net_amount = round(gross_amount - fee_amount, 2)
 
     return {
-        # 정산번호를 STL-00000001 같은 형식의 고정 길이 문자열로 만든다.
-        "settlement_id": f"STL-{seq:08d}",
+        # 파일마다 다시 1번부터 시작해도 겹치지 않도록 배치 고유 토큰을 포함한다.
+        "settlement_id": f"STL-{batch_token}-{seq:06d}",
         "batch_id": batch_id,
         # 시작값과 끝값 사이의 정수 하나를 랜덤 선택
         "merchant_id": f"MCH-{random.randint(100, 599)}",
@@ -407,9 +407,9 @@ def generate_csv_file(row_count: int = 50):
     """정산 CSV 파일 1개 생성"""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    batch_id = f"BATCH-{timestamp}"
-    filename = f"settlement_{timestamp}.csv"
+    batch_token = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    batch_id = f"BATCH-{batch_token}"
+    filename = f"settlement_{batch_token}.csv"
     filepath = os.path.join(OUTPUT_DIR, filename)
 
     fieldnames = [
@@ -420,7 +420,7 @@ def generate_csv_file(row_count: int = 50):
 
     rows = []
     for i in range(1, row_count + 1):
-        row = generate_settlement_row(i, batch_id)
+        row = generate_settlement_row(i, batch_id, batch_token)
         rows.append(row)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -624,7 +624,7 @@ curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "Ni
 - `scripts/nifi/api_payment_simulator.py` 정상 동작 확인
   - 검증 예시: `curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | jq`
 - `scripts/nifi/csv_settlement_generator.py` 정상 동작 확인
-  - 검증 예시: `data/nifi/settlement/settlement_20260408_135947.csv` 생성
+  - 검증 예시: `data/nifi/settlement/settlement_20260408135947012345.csv` 형태의 파일 생성
 - NiFi 웹 UI 접근 확인
   - 검증 예시: `curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "NiFi NOT READY"`
 
@@ -1089,8 +1089,10 @@ ListFile
                                                                            │
                                                                            └── (success) → JoltTransformJSON
                                                                                              │
-                                                                                             ├── (success) → Output Port [file-out]
-                                                                                             └── (failure) → LogAttribute [변환실패]
+                                                                                             └── (success) → ExecuteScript
+                                                                                                                    │
+                                                                                                                    ├── (success) → Output Port [file-out]
+                                                                                                                    └── (failure) → LogAttribute [변환실패-UTC정규화]
 ```
 
 ### 3-2. ListFile 프로세서 설정
@@ -1176,11 +1178,12 @@ CSV 파일 하나에 50건의 레코드가 포함되어 있으므로 개별 레�
 
 ### 3-6A. UpdateAttribute — 정산 수집 시각 추가
 
-정산 CSV에도 API와 동일한 `ingested_at` 필드를 넣어 공통 계약을 맞춘다.
+정산 CSV에도 API와 동일한 `ingested_at` 필드를 넣고, 파일 수집 소스를 구분하기 위한 `source_system`을 함께 추가해 공통 계약을 맞춘다.
 
 | 속성 | 값 |
 |------|-----|
 | ingested_at | `${now():format("yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")}` |
+| source_system | `nexus-settlement-file` |
 
 관계 연결:
 - `SplitRecord split -> UpdateAttribute`
@@ -1192,7 +1195,7 @@ CSV 파일 하나에 50건의 레코드가 포함되어 있으므로 개별 레�
 | Jolt Specification | 아래 정산 CSV용 Jolt 스펙 붙여넣기 |
 
 관계 연결:
-- `success` -> `file-out`
+- `success` -> `ExecuteScript`
 - `failure` -> `변환실패`
 
 ```bash
@@ -1221,6 +1224,7 @@ cat > config/nifi/jolt-spec-file-settlement.json << 'EOF'
       "data_source": "settlement-csv",
       "schema_version": "1.0",
       "ingested_at": "${ingested_at}",
+      "source_system": "${source_system}",
       "channel": "BATCH",
       "is_suspicious": false,
       "user_id": null,
@@ -1232,6 +1236,103 @@ cat > config/nifi/jolt-spec-file-settlement.json << 'EOF'
 EOF
 ```
 
+### 3-6B. ExecuteScript — event_timestamp UTC 정규화
+
+정산 CSV의 `settlement_date`는 날짜만 제공되므로, Jolt 변환 후 생성된 `event_timestamp`를 UTC ISO-8601 형식으로 정규화한다. 이 단계는 표준 스키마가 완성된 뒤에 수행하므로, 원본 CSV 필드명 대신 최종 표준 필드인 `event_timestamp`만 다루면 된다.
+
+여기서 목표는 "날짜만 있는 정산 기준일"을 "표준 이벤트 타임스탬프"로 바꾸는 것이다. 따라서 이 단계가 끝나면 `event_timestamp`는 더 이상 `2026-04-13` 같은 날짜 문자열이 아니라, 반드시 `2026-04-13T00:00:00Z` 형태의 UTC ISO-8601 문자열이어야 한다.
+
+`ExecuteScript`는 `Script Body`에 직접 붙여넣는 대신 외부 파일을 읽도록 구성한다. 현재 NiFi 컨테이너는 `./config/nifi`를 `/opt/nifi/custom-config`에 마운트하므로, `config/nifi/scripts/` 아래에 스크립트를 두면 설정과 자산 구조를 더 깔끔하게 유지할 수 있다.
+
+```bash
+mkdir -p config/nifi/scripts
+
+cat > config/nifi/scripts/normalize-settlement-event-timestamp.groovy << 'EOF'
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import org.apache.nifi.processor.io.StreamCallback
+import java.nio.charset.StandardCharsets
+import java.util.TimeZone
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    flowFile = session.write(flowFile, { inputStream, outputStream ->
+        def json = new JsonSlurper().parse(
+            inputStream.newReader(StandardCharsets.UTF_8.name())
+        )
+
+        if (json.event_timestamp instanceof String &&
+                json.event_timestamp ==~ /\d{4}-\d{2}-\d{2}/) {
+            def date = Date.parse("yyyy-MM-dd", json.event_timestamp)
+            json.event_timestamp = date.format(
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                TimeZone.getTimeZone("UTC")
+            )
+        }
+
+        outputStream.write(
+            JsonOutput.toJson(json).getBytes(StandardCharsets.UTF_8)
+        )
+    } as StreamCallback)
+
+    flowFile = session.putAttribute(flowFile, "event_timestamp.normalized", "true")
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    log.error("event_timestamp UTC 정규화 실패", e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+EOF
+```
+
+`ExecuteScript` 설정:
+
+| 속성 | 값 |
+|------|-----|
+| Script Engine | `Groovy` |
+| Script File | `/opt/nifi/custom-config/scripts/normalize-settlement-event-timestamp.groovy` |
+| Script Body | 비움 |
+| Module Directory | 비움 |
+
+이 단계에서 `Script File` 방식을 선택하면 NiFi 캔버스에 긴 스크립트를 직접 붙여넣지 않아도 되고, `config/nifi/scripts/` 아래의 버전 관리 대상 파일을 그대로 재사용할 수 있다. 팀 작업이나 재현 실습 관점에서도 `Script Body`보다 추적이 쉽다.
+
+관계 연결:
+- `JoltTransformJSON success -> ExecuteScript`
+- `ExecuteScript success -> file-out`
+- `ExecuteScript failure -> LogAttribute [변환실패-UTC정규화]`
+
+`LogAttribute [변환실패-UTC정규화]` 설정:
+
+| 속성 | 값 |
+|------|-----|
+| Log Level | `error` |
+| Log prefix | `[UTC-NORMALIZE-FAIL]` |
+| Attributes to Log | `filename, uuid, mime.type, event_timestamp, source_system, data_source, event_timestamp.normalized` |
+
+이 로그 프로세서는 `ExecuteScript`에서 UTC 정규화에 실패한 FlowFile의 핵심 식별값을 `nifi-app.log`에 남긴다. `event_timestamp.normalized=true`가 찍히지 않았거나, `event_timestamp`가 날짜형 문자열로 남아 있는 경우 이 로그를 통해 즉시 확인할 수 있다.
+
+정상 동작 검증 순서:
+
+1. `JoltTransformJSON -> ExecuteScript` 큐에서 FlowFile이 정상적으로 소비되는지 확인한다.
+2. `ExecuteScript -> file-out` connection에서 FlowFile 1건을 선택한다.
+3. `View data`에서 `event_timestamp`가 `2026-04-13T00:00:00Z`처럼 UTC 형식으로 바뀌었는지 확인한다.
+4. `Attributes` 탭에서 `event_timestamp.normalized = true`가 붙었는지 확인한다.
+5. 오류가 발생하면 `ExecuteScript failure -> LogAttribute [변환실패-UTC정규화]`와 `nifi-app.log`를 함께 본다.
+
+완료 판단 기준:
+
+- `file-out` 직전 FlowFile Content에 `event_timestamp`가 반드시 `T00:00:00Z`를 포함한 UTC 문자열로 표시된다.
+- 같은 FlowFile Attribute에 `event_timestamp.normalized = true`가 기록된다.
+- `source_system = nexus-settlement-file`, `data_source = settlement-csv`, `ingested_at`가 함께 유지된다.
+- `failure` 경로에 FlowFile이 쌓이지 않고, `변환실패-UTC정규화` 로그가 발생하지 않는다.
+
+정상 처리 후 `event_timestamp` 예시:
+
+```json
+"event_timestamp": "2026-04-13T00:00:00Z"
+```
+
 ### 3-7. 정산 CSV 수집 테스트
 
 ```bash
@@ -1240,13 +1341,21 @@ python scripts/nifi/csv_settlement_generator.py -n 3 -r 30 -i 30
 
 # NiFi UI에서:
 # 1. PG-2: File Ingestion 내 모든 프로세서 시작
-# 2. ListFile이 파일 탐지 → FetchFile이 읽기 → ConvertRecord → SplitRecord → Jolt 변환
+# 2. ListFile이 파일 탐지 → FetchFile이 읽기 → ConvertRecord → SplitRecord → UpdateAttribute → Jolt → ExecuteScript
 # 3. Output Port 직전 Connection에서 FlowFile 확인
 # 4. /data/settlement/processed/ 디렉토리로 파일 이동 확인
 
 ls -la data/nifi/settlement/
 ls -la data/nifi/settlement/processed/
 ```
+
+정산 CSV 테스트가 정상 완료되면 `file-out` 직전 FlowFile은 아래 조건을 만족해야 한다.
+
+- CSV 원본 필드가 표준 스키마로 변환되어 있다.
+- `source_system = nexus-settlement-file`
+- `data_source = settlement-csv`
+- `ingested_at`가 포함되어 있다.
+- `event_timestamp`가 `2026-04-13T00:00:00Z` 형태의 UTC 문자열이다.
 
 ### 3-8. PG-3: DB Ingestion — PostgreSQL 고객 마스터 수집
 
@@ -1473,11 +1582,12 @@ docker exec -it lab-nifi sh -c 'ls -l /opt/nifi/custom-config/postgresql-42.7.3.
 
 ### 3-14. UpdateAttribute — DB 수집 시각 추가
 
-DB 변경 이벤트에도 `ingested_at`를 넣어 API/CSV와 같은 공통 시간을 유지한다.
+DB 변경 이벤트에도 `ingested_at`를 넣고, DB 소스 식별용 `source_system`을 함께 추가해 API/CSV와 같은 공통 메타데이터 계약을 유지한다.
 
 | 속성 | 값 |
 |------|-----|
 | ingested_at | `${now():format("yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")}` |
+| source_system | `nexuspay-customer-db` |
 
 관계 연결:
 - `SplitRecord split -> UpdateAttribute`
@@ -1493,7 +1603,7 @@ DB 변경 이벤트에도 `ingested_at`를 넣어 API/CSV와 같은 공통 시�
 | Jolt Specification | 아래 고객 마스터용 Jolt 스펙 붙여넣기 |
 
 관계 연결:
-- `success` -> `db-out`
+- `success` -> `ExecuteScript`
 - `failure` -> `변환실패`
 
 ```bash
@@ -1524,6 +1634,7 @@ cat > config/nifi/jolt-spec-db-customer.json << 'EOF'
     "spec": {
       "event_type": "CUSTOMER_UPDATE",
       "data_source": "customer-db",
+      "source_system": "${source_system}",
       "schema_version": "1.0",
       "ingested_at": "${ingested_at}",
       "channel": "DB_SYNC",
@@ -1538,6 +1649,103 @@ cat > config/nifi/jolt-spec-db-customer.json << 'EOF'
   }
 ]
 EOF
+```
+
+### 3-15A. ExecuteScript — DB event_timestamp UTC 정규화
+
+DB 수집에서는 PostgreSQL `updated_at` 값이 Jolt 변환 후 `event_timestamp`로 전달된다. 이 값은 `2026-04-14 05:28:02.068599`처럼 timezone 정보가 없는 문자열일 수 있으므로, `ExecuteScript`를 Jolt 뒤에 두고 UTC ISO-8601 형식으로 정규화한다.
+
+실습 기본 가정:
+
+- PostgreSQL `updated_at` 값을 UTC 기준 timestamp로 해석한다.
+- 만약 운영 환경에서 DB가 KST 로컬 시간을 저장한다면, 아래 스크립트의 `SOURCE_ZONE`을 `ZoneId.of("Asia/Seoul")`로 바꾼다.
+
+```bash
+cat > config/nifi/scripts/normalize-customer-event-timestamp.groovy << 'EOF'
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import org.apache.nifi.processor.io.StreamCallback
+import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+def flowFile = session.get()
+if (!flowFile) return
+
+def SOURCE_ZONE = ZoneId.of("UTC")
+def INPUT_FORMATS = [
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+]
+
+try {
+    flowFile = session.write(flowFile, { inputStream, outputStream ->
+        def json = new JsonSlurper().parse(
+            inputStream.newReader(StandardCharsets.UTF_8.name())
+        )
+
+        if (json.event_timestamp instanceof String) {
+            def rawTimestamp = json.event_timestamp
+            LocalDateTime parsed = null
+
+            for (formatter in INPUT_FORMATS) {
+                try {
+                    parsed = LocalDateTime.parse(rawTimestamp, formatter)
+                    break
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (parsed != null) {
+                json.event_timestamp = parsed
+                    .atZone(SOURCE_ZONE)
+                    .withZoneSameInstant(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'"))
+            }
+        }
+
+        outputStream.write(
+            JsonOutput.toJson(json).getBytes(StandardCharsets.UTF_8)
+        )
+    } as StreamCallback)
+
+    flowFile = session.putAttribute(flowFile, "event_timestamp.normalized", "true")
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    log.error("DB event_timestamp UTC 정규화 실패", e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+EOF
+```
+
+`ExecuteScript` 설정:
+
+| 속성 | 값 |
+|------|-----|
+| Script Engine | `Groovy` |
+| Script File | `/opt/nifi/custom-config/scripts/normalize-customer-event-timestamp.groovy` |
+| Script Body | 비움 |
+| Module Directory | 비움 |
+
+관계 연결:
+- `JoltTransformJSON success -> ExecuteScript`
+- `ExecuteScript success -> db-out`
+- `ExecuteScript failure -> LogAttribute [변환실패-UTC정규화]`
+
+`LogAttribute [변환실패-UTC정규화]` 설정:
+
+| 속성 | 값 |
+|------|-----|
+| Log Level | `error` |
+| Log prefix | `[DB-UTC-NORMALIZE-FAIL]` |
+| Attributes to Log | `filename, uuid, mime.type, event_timestamp, source_system, data_source, event_timestamp.normalized, tablename` |
+
+정상 처리 후 `event_timestamp` 예시:
+
+```json
+"event_timestamp": "2026-04-14T05:28:02Z"
 ```
 
 ### 3-16. DB 수집 증분 추출 검증
@@ -1709,20 +1917,22 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh \
 
 ### 4-6. PG-5: Kafka Publishing — PublishKafka 연동
 
+> **NiFi 2.9.0 프로세서 이름 정리**: 현재 NiFi 2.9.0 UI에서는 Kafka 송신 프로세서가 `PublishKafka`, 수신 프로세서가 `ConsumeKafka`로 표시된다. 과거 문서나 예시에서 보이던 `PublishKafka_2_6`, `ConsumeKafka_2_6`는 구버전 NiFi 1.x 계열 명칭이다. 이번 Week 3 실습에서는 NiFi가 Kafka로 전송만 수행하므로 `PublishKafka`만 사용하고, `ConsumeKafka`는 사용하지 않는다.
+
 `PG-5: Kafka Publishing` 내부:
 
 ```
-Input Port [valid-data] ──→ PublishKafka_2_6
+Input Port [valid-data] ──→ PublishKafka
                                 │
                                 ├── (success) → LogAttribute [전송성공]
-                                └── (failure) → RetryFlowFile → PublishKafka_2_6
+                                └── (failure) → RetryFlowFile → PublishKafka
                                                     │
-                                                    └── (retries exhausted) → PublishKafka_2_6 [DLQ 토픽]
+                                                    └── (retries exhausted) → PublishKafka [DLQ 토픽]
 
-Input Port [invalid-data] ──→ PublishKafka_2_6 [DLQ 토픽]
+Input Port [invalid-data] ──→ PublishKafka [DLQ 토픽]
 ```
 
-### 4-7. PublishKafka_2_6 프로세서 설정 — 정상 데이터
+### 4-7. PublishKafka 프로세서 설정 — 정상 데이터
 
 | 속성 | 값 | 설명 |
 |------|-----|------|
@@ -1734,7 +1944,7 @@ Input Port [invalid-data] ──→ PublishKafka_2_6 [DLQ 토픽]
 | Compression Type | `lz4` | |
 | Max Request Size | `1 MB` | |
 
-### 4-8. PublishKafka_2_6 프로세서 설정 — DLQ
+### 4-8. PublishKafka 프로세서 설정 — DLQ
 
 | 속성 | 값 | 설명 |
 |------|-----|------|
@@ -1855,7 +2065,7 @@ FORK        — FlowFile 분리 (SplitJson, SplitRecord 등)
 
 1. NiFi UI 우측 상단 **Provenance** 아이콘 (시계 모양) 클릭
 2. 검색 필터 설정:
-   - Component Name: `PublishKafka_2_6` (Kafka 전송 이벤트만)
+   - Component Name: `PublishKafka` (Kafka 전송 이벤트만)
    - Event Type: `SEND`
    - 시간 범위: 최근 1시간
 3. 검색 결과에서 특정 이벤트 클릭 → **Lineage** 버튼

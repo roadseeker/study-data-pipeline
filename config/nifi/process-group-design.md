@@ -67,7 +67,7 @@ Processor는 FlowFile을 생성, 변환, 전달하는 작업 단위다.
 - `ListFile` / `FetchFile`: 파일 시스템 감시 및 수집
 - `ExecuteSQL` / `QueryDatabaseTable`: DB 조회 및 증분 수집
 - `JoltTransformJSON`: JSON 스키마 변환
-- `PublishKafka_2_6`: Kafka 토픽 전송
+- `PublishKafka`: Kafka 토픽 전송
 - `RouteOnAttribute` / `RouteOnContent`: 조건부 라우팅
 
 ### Connection과 Back-Pressure
@@ -251,9 +251,10 @@ flowchart LR
     A["ListFile"] --> B["FetchFile"]
     B --> C["ConvertRecord<br/>(CSV -> JSON)"]
     C --> D["SplitRecord"]
-    D --> E["JoltTransformJSON"]
-    E --> F["UpdateAttribute"]
-    F --> G["Output Port: file-out"]
+    D --> E["UpdateAttribute"]
+    E --> F["JoltTransformJSON"]
+    F --> G["ExecuteScript<br/>(UTC normalize)"]
+    G --> H["Output Port: file-out"]
 ```
 
 ```text
@@ -269,10 +270,13 @@ flowchart LR
 [SplitRecord]
    |
    v
+[UpdateAttribute]
+   |
+   v
 [JoltTransformJSON]
    |
    v
-[UpdateAttribute]
+[ExecuteScript: UTC normalize]
    |
    v
 [Output Port: file-out]
@@ -280,14 +284,17 @@ flowchart LR
 
 주요 Attribute:
 
-- `source_system=legacy-settlement`
+- `source_system=nexus-settlement-file`
 - `source_type=file`
 - `filename`
 - `file_ingest_time`
+- `event_timestamp.normalized=true`
+- `script_file=/opt/nifi/custom-config/scripts/normalize-settlement-event-timestamp.groovy`
 
 설계 포인트:
 
 - `ListFile + FetchFile` 패턴으로 파일 감지와 읽기를 분리한다.
+- 표준화 후 `ExecuteScript`로 `event_timestamp`를 UTC ISO-8601 형식으로 정규화한다.
 - 중복 파일 처리 방지와 상태 관리를 쉽게 한다.
 - 처리 완료 파일은 `processed/` 경로 이동 또는 별도 보관 정책을 둔다.
 
@@ -308,9 +315,10 @@ flowchart LR
 flowchart LR
     A["QueryDatabaseTable"] --> B["ConvertRecord<br/>(Avro -> JSON)"]
     B --> C["SplitRecord"]
-    C --> D["JoltTransformJSON"]
-    D --> E["UpdateAttribute"]
-    E --> F["Output Port: db-out"]
+    C --> D["UpdateAttribute"]
+    D --> E["JoltTransformJSON"]
+    E --> F["ExecuteScript<br/>(UTC normalize)"]
+    F --> G["Output Port: db-out"]
 ```
 
 ```text
@@ -323,10 +331,13 @@ flowchart LR
 [SplitRecord]
    |
    v
+[UpdateAttribute]
+   |
+   v
 [JoltTransformJSON]
    |
    v
-[UpdateAttribute]
+[ExecuteScript: UTC normalize]
    |
    v
 [Output Port: db-out]
@@ -356,14 +367,17 @@ flowchart LR
 
 주요 Attribute:
 
-- `source_system=postgres-customers`
+- `source_system=nexuspay-customer-db`
 - `source_type=db`
 - `table_name=customers`
 - `incremental_column=updated_at`
+- `event_timestamp.normalized=true`
 
 설계 포인트:
 
 - `updated_at` 같은 컬럼을 기준으로 증분 수집한다.
+- `SplitRecord` 뒤 `UpdateAttribute`에서 `ingested_at`, `source_system`를 추가한다.
+- Jolt 이후 `ExecuteScript`로 `event_timestamp`를 UTC ISO-8601 형식으로 정규화한다.
 - 전체 테이블 재조회보다 증분 수집을 우선 설계한다.
 - 고객 마스터는 이벤트성 데이터가 아니라 기준정보라는 점을 명확히 구분한다.
 
@@ -433,17 +447,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["Input Port: valid-data"] --> B["PublishKafka_2_6<br/>ingested topic"]
+    A["Input Port: valid-data"] --> B["PublishKafka<br/>ingested topic"]
     B --> C["LogAttribute<br/>publish-success"]
 
-    D["Input Port: invalid-data"] --> E["PublishKafka_2_6<br/>DLQ topic"]
+    D["Input Port: invalid-data"] --> E["PublishKafka<br/>DLQ topic"]
     E --> F["LogAttribute<br/>publish-dlq"]
 ```
 
 ```text
-[Input Port: valid-data] -----> [PublishKafka_2_6: ingested topic] -----> [LogAttribute: publish-success]
+[Input Port: valid-data] -----> [PublishKafka: ingested topic] -----> [LogAttribute: publish-success]
 
-[Input Port: invalid-data] ---> [PublishKafka_2_6: DLQ topic] ----------> [LogAttribute: publish-dlq]
+[Input Port: invalid-data] ---> [PublishKafka: DLQ topic] ----------> [LogAttribute: publish-dlq]
 ```
 
 주요 Attribute:
