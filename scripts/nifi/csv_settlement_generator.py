@@ -22,9 +22,20 @@ GROSS_AMOUNT_RANGES = {
     "JPY": (10_000, 5_000_000),
 }
 FEE_RATE_RANGE = (0.003, 0.03)
+MERCHANT_CATALOG = [
+    {"merchant_id": "MCH-101", "merchant_name": "스타벅스 강남점", "merchant_category": "CAFE"},
+    {"merchant_id": "MCH-203", "merchant_name": "올리브영 홍대점", "merchant_category": "BEAUTY"},
+    {"merchant_id": "MCH-213", "merchant_name": "이마트 성수점", "merchant_category": "MART"},
+    {"merchant_id": "MCH-303", "merchant_name": "GS25 역삼점", "merchant_category": "CONVENIENCE"},
+    {"merchant_id": "MCH-404", "merchant_name": "현대백화점 판교", "merchant_category": "DEPARTMENT"},
+    {"merchant_id": "MCH-460", "merchant_name": "쿠팡", "merchant_category": "ECOMMERCE"},
+    {"merchant_id": "MCH-505", "merchant_name": "배달의민족", "merchant_category": "DELIVERY"},
+    {"merchant_id": "MCH-555", "merchant_name": "넷플릭스 코리아", "merchant_category": "SUBSCRIPTION"},
+]
 
 def generate_settlement_row(seq: int, batch_id: str, batch_token: str) -> dict:
     """정산 레코드 1건 생성"""
+    merchant = random.choice(MERCHANT_CATALOG)
     currency = random.choices(
         [item[0] for item in CURRENCY_WEIGHTS],
         weights=[item[1] for item in CURRENCY_WEIGHTS],
@@ -51,8 +62,9 @@ def generate_settlement_row(seq: int, batch_id: str, batch_token: str) -> dict:
         # 파일마다 다시 1번부터 시작해도 겹치지 않도록 배치 고유 토큰을 포함한다.
         "settlement_id": f"STL-{batch_token}-{seq:06d}",
         "batch_id": batch_id,
-        # 시작값과 끝값 사이의 정수 하나를 랜덤 선택
-        "merchant_id": f"MCH-{random.randint(100, 599)}",
+        "merchant_id": merchant["merchant_id"],
+        "merchant_name": merchant["merchant_name"],
+        "merchant_category": merchant["merchant_category"],
         # 목록 안의 값 중 하나를 랜덤 선택
         "settlement_type": random.choice(SETTLEMENT_TYPES),
         "gross_amount": gross_amount,
@@ -79,7 +91,7 @@ def generate_csv_file(row_count: int = 50):
     filepath = os.path.join(OUTPUT_DIR, filename)
 
     fieldnames = [
-        "settlement_id", "batch_id", "merchant_id", "settlement_type",
+        "settlement_id", "batch_id", "merchant_id", "merchant_name", "merchant_category", "settlement_type",
         "gross_amount", "fee_amount", "net_amount", "currency",
         "tx_count", "settlement_date", "created_at", "status",
     ]
