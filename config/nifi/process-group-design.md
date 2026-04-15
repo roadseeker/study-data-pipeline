@@ -52,9 +52,9 @@ Nexus Pay 기준 예시는 다음과 같다.
 
 설계 반영 사항:
 
-- 소스 식별용 `source_system`, `source_type`
+- 소스 식별용 `source_system`, `data_source`
 - 추적용 `event_id`, `record_id`, `filename`
-- 감사 대응용 `ingest_time`, `correlation_id`
+- 감사 대응용 `ingested_at`, `correlation_id`
 
 같은 메타데이터를 Attributes로 유지하도록 설계한다.
 
@@ -193,10 +193,11 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["InvokeHTTP(response)"] --> B["SplitJson"]
-    B --> C["EvaluateJsonPath"]
-    C --> D["UpdateAttribute"]
+    B --> C["UpdateAttribute"]
+    C --> D["ExecuteScript"]
     D --> E["JoltTransformJSON"]
-    E --> F["Output Port: api-out"]
+    E --> F["EvaluateJsonPath"]
+    F --> G["Output Port: api-out"]
 ```
 
 ```text
@@ -206,13 +207,16 @@ flowchart LR
 [SplitJson]
    |
    v
-[EvaluateJsonPath]
-   |
-   v
 [UpdateAttribute]
    |
    v
+[ExecuteScript]
+   |
+   v
 [JoltTransformJSON]
+   |
+   v
+[EvaluateJsonPath]
    |
    v
 [Output Port: api-out]
@@ -221,7 +225,7 @@ flowchart LR
 주요 Attribute:
 
 - `source_system=nexuspay-payment-api`
-- `source_type=api`
+- `data_source=payment-api`
 - `api_endpoint=/api/v1/payments/recent`
 - `ingested_at`
 
@@ -230,8 +234,9 @@ flowchart LR
 - 응답 실패는 별도 실패 경로로 분리한다.
 - `InvokeHTTP` 성공 응답 본문은 `response` relationship에서 후속 처리한다.
 - JSON 배열 응답은 `SplitJson`으로 건별 처리한다.
-- `event_id`, `user_id`, `amount`, `currency` 같은 주요 필드를 추출한다.
-- `UpdateAttribute`에서 수집 시각과 소스 시스템 값을 만든 뒤 Jolt에서 표준 스키마에 반영한다.
+- `UpdateAttribute`에서 수집 시각과 소스 시스템 값을 만든다.
+- `ExecuteScript`는 원본 API 필드 `timestamp`를 Jolt 전에 UTC ISO-8601 형식으로 정규화한다.
+- `JoltTransformJSON` 뒤 공통 `EvaluateJsonPath`에서 `event_id`, `event_type`, `event_timestamp`, `data_source`, `source_system`를 attribute로 추출한다.
 
 ### PG-2: File Ingestion
 
@@ -252,9 +257,10 @@ flowchart LR
     B --> C["ConvertRecord<br/>(CSV -> JSON)"]
     C --> D["SplitRecord"]
     D --> E["UpdateAttribute"]
-    E --> F["JoltTransformJSON"]
-    F --> G["ExecuteScript<br/>(UTC normalize)"]
-    G --> H["Output Port: file-out"]
+    E --> F["ExecuteScript<br/>(UTC normalize)"]
+    F --> G["JoltTransformJSON"]
+    G --> H["EvaluateJsonPath"]
+    H --> I["Output Port: file-out"]
 ```
 
 ```text
@@ -273,10 +279,13 @@ flowchart LR
 [UpdateAttribute]
    |
    v
+[ExecuteScript: UTC normalize]
+   |
+   v
 [JoltTransformJSON]
    |
    v
-[ExecuteScript: UTC normalize]
+[EvaluateJsonPath]
    |
    v
 [Output Port: file-out]
@@ -284,17 +293,18 @@ flowchart LR
 
 주요 Attribute:
 
-- `source_system=nexus-settlement-file`
-- `source_type=file`
+- `source_system=nexuspay-settlement-file`
+- `data_source=settlement-csv`
 - `filename`
-- `file_ingest_time`
-- `event_timestamp.normalized=true`
+- `ingested_at`
+- `settlement_date.normalized=true`
 - `script_file=/opt/nifi/custom-config/scripts/normalize-settlement-event-timestamp.groovy`
 
 설계 포인트:
 
 - `ListFile + FetchFile` 패턴으로 파일 감지와 읽기를 분리한다.
-- 표준화 후 `ExecuteScript`로 `event_timestamp`를 UTC ISO-8601 형식으로 정규화한다.
+- `ExecuteScript`는 원본 필드 `settlement_date`를 Jolt 전에 UTC ISO-8601 형식으로 정규화한다.
+- `JoltTransformJSON` 뒤 공통 `EvaluateJsonPath`에서 `event_id`, `event_type`, `event_timestamp`, `data_source`, `source_system`를 attribute로 추출한다.
 - 중복 파일 처리 방지와 상태 관리를 쉽게 한다.
 - 처리 완료 파일은 `processed/` 경로 이동 또는 별도 보관 정책을 둔다.
 
@@ -316,9 +326,10 @@ flowchart LR
     A["QueryDatabaseTable"] --> B["ConvertRecord<br/>(Avro -> JSON)"]
     B --> C["SplitRecord"]
     C --> D["UpdateAttribute"]
-    D --> E["JoltTransformJSON"]
-    E --> F["ExecuteScript<br/>(UTC normalize)"]
-    F --> G["Output Port: db-out"]
+    D --> E["ExecuteScript<br/>(UTC normalize)"]
+    E --> F["JoltTransformJSON"]
+    F --> G["EvaluateJsonPath"]
+    G --> H["Output Port: db-out"]
 ```
 
 ```text
@@ -334,10 +345,13 @@ flowchart LR
 [UpdateAttribute]
    |
    v
+[ExecuteScript: UTC normalize]
+   |
+   v
 [JoltTransformJSON]
    |
    v
-[ExecuteScript: UTC normalize]
+[EvaluateJsonPath]
    |
    v
 [Output Port: db-out]
@@ -368,16 +382,18 @@ flowchart LR
 주요 Attribute:
 
 - `source_system=nexuspay-customer-db`
-- `source_type=db`
+- `data_source=customer-db`
 - `table_name=customers`
 - `incremental_column=updated_at`
+- `ingested_at`
 - `event_timestamp.normalized=true`
 
 설계 포인트:
 
 - `updated_at` 같은 컬럼을 기준으로 증분 수집한다.
 - `SplitRecord` 뒤 `UpdateAttribute`에서 `ingested_at`, `source_system`를 추가한다.
-- Jolt 이후 `ExecuteScript`로 `event_timestamp`를 UTC ISO-8601 형식으로 정규화한다.
+- `ExecuteScript`는 원본 필드 `updated_at`를 Jolt 전에 UTC ISO-8601 형식으로 정규화한다.
+- `JoltTransformJSON` 뒤 공통 `EvaluateJsonPath`에서 `event_id`, `event_type`, `event_timestamp`, `data_source`, `source_system`를 attribute로 추출한다.
 - 전체 테이블 재조회보다 증분 수집을 우선 설계한다.
 - 고객 마스터는 이벤트성 데이터가 아니라 기준정보라는 점을 명확히 구분한다.
 
@@ -397,39 +413,43 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["Input Port: api-in"] --> M["Merge point"]
-    B["Input Port: file-in"] --> M
-    C["Input Port: db-in"] --> M
-    M --> D["ValidateRecord"]
-    D --> E["RouteOnAttribute"]
-    E -->|valid| F["UpdateAttribute"]
-    E -->|invalid| G["UpdateAttribute"]
-    F --> H["Output Port: valid-out"]
-    G --> I["Output Port: invalid-out"]
+    A["Input Port: api-in"] --> B["LogAttribute<br/>api-in-check"]
+    C["Input Port: file-in"] --> D["LogAttribute<br/>file-in-check"]
+    E["Input Port: db-in"] --> F["LogAttribute<br/>db-in-check"]
+    B --> G["ValidateRecord"]
+    D --> G
+    F --> G
+    G -->|valid| H["UpdateAttribute<br/>valid-meta"]
+    G -->|invalid| I["UpdateAttribute<br/>invalid-meta"]
+    G -->|failure| J["LogAttribute<br/>validate-fail"]
+    H --> K["Output Port: valid-out"]
+    I --> L["Output Port: invalid-out"]
 ```
 
 ```text
-[Input Port: api-in] ----+
-                         |
-[Input Port: file-in] ---+--> [Merge point] --> [ValidateRecord] --> [RouteOnAttribute]
-                         |                                              |
-[Input Port: db-in] -----+                                              +--> valid   --> [UpdateAttribute] --> [Output Port: valid-out]
-                                                                        |
-                                                                        +--> invalid --> [UpdateAttribute] --> [Output Port: invalid-out]
+[Input Port: api-in] -----> [LogAttribute: api-in-check] ---+
+                                                            |
+[Input Port: file-in] ----> [LogAttribute: file-in-check] --+--> [ValidateRecord] --> valid   --> [UpdateAttribute: valid-meta] --> [Output Port: valid-out]
+                                                            |                     |
+[Input Port: db-in] ------> [LogAttribute: db-in-check] ---+                     +--> invalid --> [UpdateAttribute: invalid-meta] -> [Output Port: invalid-out]
+                                                                                  |
+                                                                                  +--> failure --> [LogAttribute: validate-fail]
 ```
 
 주요 Attribute:
 
 - `standard_schema_version`
 - `validation_status`
-- `data_domain`
+- `kafka.topic`
+- `kafka.key`
 - `source_system`
 
 설계 포인트:
 
 - 공통 스키마 계약은 이 그룹에서 강제한다.
+- `RouteOnAttribute` 없이 `ValidateRecord`의 `valid`, `invalid`, `failure` relationship를 직접 사용한다.
 - 정상/비정상 흐름을 명확히 분기해 downstream 오염을 막는다.
-- `source_system` 같은 원천 메타데이터는 유지해야 Provenance 검색이 쉽다.
+- `kafka.key=${event_id}`, `nifi.source.group=${source_system}` 같은 공통 메타데이터를 이 그룹에서 부여한다.
 
 ### PG-5: Kafka Publishing
 
@@ -448,22 +468,28 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["Input Port: valid-data"] --> B["PublishKafka<br/>ingested topic"]
-    B --> C["LogAttribute<br/>publish-success"]
+    B -->|success| C["LogAttribute<br/>publish-success"]
+    B -->|failure| D["LogAttribute<br/>publish-failure"]
 
-    D["Input Port: invalid-data"] --> E["PublishKafka<br/>DLQ topic"]
-    E --> F["LogAttribute<br/>publish-dlq"]
+    E["Input Port: invalid-data"] --> F["PublishKafka<br/>DLQ topic"]
+    F -->|success| G["LogAttribute<br/>publish-dlq"]
+    F -->|failure| H["LogAttribute<br/>publish-failure"]
 ```
 
 ```text
-[Input Port: valid-data] -----> [PublishKafka: ingested topic] -----> [LogAttribute: publish-success]
+[Input Port: valid-data] -----> [PublishKafka: ingested topic] -----> success --> [LogAttribute: publish-success]
+                                                    |
+                                                    +--> failure --> [LogAttribute: publish-failure]
 
-[Input Port: invalid-data] ---> [PublishKafka: DLQ topic] ----------> [LogAttribute: publish-dlq]
+[Input Port: invalid-data] ---> [PublishKafka: DLQ topic] ----------> success --> [LogAttribute: publish-dlq]
+                                                    |
+                                                    +--> failure --> [LogAttribute: publish-failure]
 ```
 
 주요 Attribute:
 
 - `kafka.topic`
-- `message.key`
+- `kafka.key`
 - `publish_time`
 - `delivery_status`
 
@@ -517,10 +543,10 @@ flowchart LR
 
 이를 위해 다음 원칙을 적용한다.
 
-- 각 소스 그룹에서 `source_system`, `source_type`, `ingest_time`을 기록한다.
+- 각 소스 그룹에서 `source_system`, `data_source`, `ingested_at`을 기록한다.
 - 가능한 경우 `event_id`, `record_id`, `customer_id`, `filename`을 Attributes로 유지한다.
 - 표준화 단계 이후에도 원천 식별 정보를 제거하지 않는다.
-- Kafka 전송 직전 `kafka.topic`, `message.key`를 Attributes로 남긴다.
+- Kafka 전송 직전 `kafka.topic`, `kafka.key`를 Attributes로 남긴다.
 
 예시 추적 시나리오:
 
