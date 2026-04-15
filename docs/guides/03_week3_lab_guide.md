@@ -2026,7 +2026,7 @@ EOF
 | kafka.topic | `nexuspay.events.ingested` | 통합 수집 토픽 |
 | kafka.key | `${event_id}` | 세 소스 공통 Kafka key |
 | validation_status | `valid` | 스키마 검증 통과 상태 |
-| nifi.ingested.at | `${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'', 'UTC')}` | PG-4 통과 시각 |
+| nifi.ingested.at | `${now():format("yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")}` | PG-4 통과 시각 |
 | nifi.source.group | `${source_system}` | 소스 시스템 식별자 |
 
 **2) UpdateAttribute [invalid-meta]**
@@ -2036,7 +2036,7 @@ EOF
 | kafka.topic | `nexuspay.events.dlq` | DLQ 토픽 |
 | kafka.key | `${event_id}` | 실패 데이터 추적용 키 |
 | validation_status | `invalid` | 스키마 검증 실패 상태 |
-| nifi.ingested.at | `${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss\\'Z\\'', 'UTC')}` | PG-4 분기 시각 |
+| nifi.ingested.at | `${now():format("yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")}` | PG-4 분기 시각 |
 | nifi.source.group | `${source_system}` | 소스 시스템 식별자 |
 
 ### 4-5. 통합 수집 토픽 생성
@@ -2173,6 +2173,20 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   합계: 106건
 ```
 
+실제 검증 예시 (2026-04-15):
+```
+=== 소스별 메시지 수 ===
+  customer-db: 30건
+  settlement-csv: 30건
+  payment-api: 20건
+  합계: 80건
+```
+
+검증 해석:
+- `payment-api`, `settlement-csv`, `customer-db` 세 소스가 모두 `nexuspay.events.ingested`에 적재되면 정상이다.
+- 건수는 실행 시점의 API 호출 횟수, CSV 생성 건수, DB 변경 건수에 따라 달라질 수 있다.
+- `kafka-console-consumer.sh --timeout-ms ...` 사용 시 마지막에 `TimeoutException`이 보여도, 이미 메시지를 읽고 `Processed a total of N messages`가 출력되었다면 일반적으로 추가 메시지 대기 종료로 해석하면 된다.
+
 ### 4-10. 데이터 품질 라우팅 검증
 
 의도적으로 불량 데이터를 주입하여 DLQ 라우팅을 확인한다.
@@ -2194,6 +2208,18 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --from-beginning \
   --timeout-ms 5000
 ```
+
+실제 검증 예시 (2026-04-15):
+```json
+{"event_id":null,"event_type":"INVALID_TYPE","merchant_id":"MCH-999","amount":"not_a_number","fee_amount":"abc","net_amount":"def","currency":null,"tx_count":0,"event_timestamp":null,"status":"UNKNOWN","batch_id":null,"created_at":"2026-04-01T00:00:00Z","channel":"BATCH","source_system":"nexuspay-settlement-file","data_source":"settlement-csv","ingested_at":"2026-04-15T14:15:19Z","is_suspicious":false,"schema_version":"1.0","user_id":null}
+{"event_id":"STL-BAD-002","event_type":null,"merchant_id":null,"amount":null,"fee_amount":null,"net_amount":null,"currency":null,"tx_count":null,"event_timestamp":null,"status":null,"batch_id":null,"created_at":null,"channel":"BATCH","source_system":"nexuspay-settlement-file","data_source":"settlement-csv","ingested_at":"2026-04-15T14:15:19Z","is_suspicious":false,"schema_version":"1.0","user_id":null}
+Processed a total of 2 messages
+```
+
+검증 해석:
+- 첫 번째 레코드는 타입 오류와 비정상 값(`INVALID_TYPE`, `not_a_number`, `abc`, `def`) 때문에 DLQ로 이동했다.
+- 두 번째 레코드는 필수 필드 다수가 누락된 상태여서 DLQ로 이동했다.
+- 즉 `PG-4 ValidateRecord`의 `invalid` 경로와 `PG-5 PublishKafka [dlq-topic]` 경로가 실제로 동작한 것이다.
 
 **Day 4 완료 기준**: 세 소스 데이터가 표준 스키마로 통합되어 Kafka 토픽(`nexuspay.events.ingested`)에 도착, DLQ 라우팅 정상 작동, 소스별 메시지 수 확인.
 
@@ -2564,9 +2590,12 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 
 ## Week 3 산출물 체크리스트
 
+현재 완료 현황: 17개 항목 중 10개 완료.
+
 현재 확인 기준:
 - Day 2 완료: 확인됨
 - Day 3 완료: `PG-2` 파일 수집 플로우 정상 작동, `PG-3` DB 증분 수집 검증 완료, `PG-1`·`PG-2`·`PG-3` 세 소스가 `PG-4`의 `api-in-check`·`file-in-check`·`db-in-check`로 동시에 유입되는 것까지 확인됨.
+- Day 4 완료: `payment-api` 20건, `settlement-csv` 30건, `customer-db` 30건이 `nexuspay.events.ingested`에 적재되는 것 확인, 불량 CSV 2건이 `nexuspay.events.dlq`로 라우팅되는 것 확인.
 
 | # | 산출물 | 완료 |
 |---|--------|------|
@@ -2578,7 +2607,7 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 | 6 | config/nifi/jolt-spec-api-payment.json (API Jolt 스펙) | ☑ |
 | 7 | config/nifi/jolt-spec-file-settlement.json (CSV Jolt 스펙) | ☐ |
 | 8 | config/nifi/jolt-spec-db-customer.json (DB Jolt 스펙) | ☐ |
-| 9 | config/nifi/nexuspay-standard-schema.avsc (표준 Avro 스키마) | ☐ |
+| 9 | config/nifi/nexuspay-standard-schema.avsc (표준 Avro 스키마) | ☑ |
 | 10 | scripts/nifi/measure_api_throughput.sh (API 처리량 측정 스크립트) | ☑ |
 | 11 | scripts/verify_nifi_pipeline.sh (종합 검증 스크립트) | ☐ |
 | 12 | docs/provenance-audit-guide.md (Provenance 감사 추적 가이드) | ☐ |
