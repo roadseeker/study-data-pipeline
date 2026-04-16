@@ -121,6 +121,8 @@ Use this framing consistently in:
 - Do not rewrite unrelated parts of the repository for style alone.
 - When adding new files, keep them in the directory structure implied by the weekly lab design.
 - If a change affects docs and implementation together, keep them synchronized.
+- Before creating or modifying documents, guides, AGENTS instructions, or repository-structure-related assets, first present the proposed change, the reason for it, and the target path(s), then explicitly ask whether the user wants the file created or modified.
+- Apply the same confirmation-first approach to path corrections, file moves, and stakeholder-facing deliverables so the user can approve the direction before edits are made.
 
 ## Commit Message Convention
 
