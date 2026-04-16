@@ -2726,7 +2726,7 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 | 14 | docs/nifi/nifi-architecture.md (데이터 흐름 아키텍처 문서) | ☑ |
 | 15 | docker-compose.yml 업데이트 (payment-api, NiFi 볼륨) | ☑ |
 | 16 | NiFi 플로우 (5개 프로세서 그룹 구성 완료) | ☑ |
-| 17 | Git 커밋 | ☐ |
+| 17 | Git 커밋 | ☑ |
 
 ## 핵심 개념 요약
 
