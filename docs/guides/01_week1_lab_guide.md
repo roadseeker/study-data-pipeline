@@ -522,7 +522,7 @@ docker compose up -d nifi
   # Flink — 실시간 스트림 처리
   # ──────────────────────────────────────
   flink-jobmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-jm
     command: jobmanager
     environment:
@@ -541,7 +541,7 @@ docker compose up -d nifi
       retries: 10
 
   flink-taskmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-tm
     command: taskmanager
     environment:

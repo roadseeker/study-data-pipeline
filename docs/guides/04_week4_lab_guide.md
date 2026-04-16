@@ -210,7 +210,7 @@ cat > flink-jobs/pom.xml << 'POMEOF'
     <packaging>jar</packaging>
 
     <properties>
-        <flink.version>1.18.1</flink.version>
+        <flink.version>1.20.3</flink.version>
         <kafka.version>3.7.0</kafka.version>
         <java.version>11</java.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -237,7 +237,7 @@ cat > flink-jobs/pom.xml << 'POMEOF'
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
-            <version>3.1.0-1.18</version>
+            <version>3.3.0-1.20</version>
         </dependency>
 
         <!-- Flink CEP (Complex Event Processing) -->
