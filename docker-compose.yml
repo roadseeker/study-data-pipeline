@@ -232,7 +232,7 @@ services:
   # Flink — 실시간 스트림 처리
   # ──────────────────────────────────────
   flink-jobmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-jm
     command: jobmanager
     environment:
@@ -251,7 +251,7 @@ services:
       retries: 10
 
   flink-taskmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-tm
     command: taskmanager
     environment:
@@ -342,12 +342,15 @@ services:
     image: apache/airflow:2.8.4-python3.11
     container_name: lab-airflow-web
     restart: unless-stopped
-    command: airflow webserver --port 8083
+    command: >
+      bash -c "rm -f /opt/airflow/airflow-webserver.pid &&
+      exec airflow webserver --port 8083"
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
       AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
       AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
+      AIRFLOW__WEBSERVER__WORKERS: 1
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
       _PIP_ADDITIONAL_REQUIREMENTS: "redis confluent-kafka"
     ports:
