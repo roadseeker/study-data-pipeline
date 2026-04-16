@@ -677,6 +677,7 @@ NiFi 2.9.0 운영 전제는 다음과 같다.
 
 - 회사 PC에서 `mkcert -install`로 로컬 CA를 먼저 만든다.
 - `localhost`, `127.0.0.1`, `::1`용 인증서를 `config/nifi/tls`에 직접 생성한다.
+- `config/nifi/tls`는 PC별 로컬 산출물이다. 예전 클론에 다른 PC에서 생성된 인증서가 남아 있으면 `NET::ERR_CERT_AUTHORITY_INVALID`가 날 수 있으므로, 이 경우 `bash scripts/nifi/regenerate_local_tls.sh` 실행 후 `docker compose restart nifi`로 새 인증서를 반영한다.
 - `config/nifi/start-nifi-2.9.0.sh`는 `nifi.security.needClientAuth=false`를 강제로 반영하므로, 정상 기동 시 브라우저가 클라이언트 인증서를 요구하지 않아야 한다.
 - `.env`의 `NIFI_USERNAME`, `NIFI_PASSWORD`는 Git Bash의 현재 셸 환경변수보다 우선하지 않으므로, 필요 시 `unset NIFI_USERNAME`, `unset NIFI_PASSWORD` 후 재기동한다.
 
@@ -1356,6 +1357,7 @@ cat > config/nifi/jolt-spec-file-settlement.json << 'EOF'
     "operation": "default",
     "spec": {
       "data_source": "settlement-csv",
+      "source_system": "${source_system}",
       "schema_version": "1.0",
       "ingested_at": "${ingested_at}",
       "channel": "BATCH",
@@ -2142,7 +2144,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --topic nexuspay.events.ingested \
   --from-beginning \
   --timeout-ms 10000 2>/dev/null | \
-  python3 -c "
+  python -c "
 import sys, json
 from collections import Counter
 sources = Counter()
@@ -2182,9 +2184,19 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   합계: 80건
 ```
 
+실제 검증 예시 (2026-04-16):
+```
+=== 소스별 메시지 수 ===
+  customer-db: 45건
+  payment-api: 20건
+  settlement-csv: 110건
+  합계: 175건
+```
+
 검증 해석:
 - `payment-api`, `settlement-csv`, `customer-db` 세 소스가 모두 `nexuspay.events.ingested`에 적재되면 정상이다.
 - 건수는 실행 시점의 API 호출 횟수, CSV 생성 건수, DB 변경 건수에 따라 달라질 수 있다.
+- `--from-beginning` 기준 조회이므로, Kafka 보존 기간 내 이전 실습분이 남아 있으면 총건수는 누적되어 증가할 수 있다.
 - `kafka-console-consumer.sh --timeout-ms ...` 사용 시 마지막에 `TimeoutException`이 보여도, 이미 메시지를 읽고 `Processed a total of N messages`가 출력되었다면 일반적으로 추가 메시지 대기 종료로 해석하면 된다.
 
 ### 4-10. 데이터 품질 라우팅 검증
@@ -2248,24 +2260,54 @@ FORK        — FlowFile 분리 (SplitJson, SplitRecord 등)
 
 **방법 1: 글로벌 Provenance 검색**
 
-1. NiFi UI 우측 상단 **Provenance** 아이콘 (시계 모양) 클릭
-2. 검색 필터 설정:
-   - Component Name: `PublishKafka` (Kafka 전송 이벤트만)
-   - Event Type: `SEND`
-   - 시간 범위: 최근 1시간
-3. 검색 결과에서 특정 이벤트 클릭 → **Lineage** 버튼
+> **시간대 메모**: 이 실습의 `ingested_at`, `event_timestamp`와 Kafka 검증 예시는 UTC 기준이다. 한국시간(KST)은 `UTC+9`이므로, 예를 들어 `2026-04-16 09:57 KST`는 `2026-04-16 00:57 UTC`로 해석한다. 다만 실무 추적에서는 시간을 직접 계산하기보다 `event_id`, `data_source`, `source_system` 같은 attribute로 먼저 찾는 편이 훨씬 덜 헷갈린다.
+
+1. NiFi UI 우측 상단 **메뉴(☰)** 클릭 → **Data Provenance** 선택
+2. 우측 상단 **Search** 클릭 → `Search Events` 팝업에서 1차 검색 조건 입력
+   - `Event Type`: `SEND`
+   - 필요 시 `Filename` 또는 `FlowFile UUID` 입력
+   - CSV 추적 시 예: `Filename = settlement_20260416014714873026.csv`
+3. 검색 후 메인 목록에서 다시 좁히기
+   - `Filter By = component name`
+   - `Filter = PublishKafka [ingested-topic]` 또는 `PublishKafka [dlq-topic]`
+4. 후보 이벤트 행의 우측 `⋮` 메뉴 클릭 → **View Details**
+5. `Attributes` 또는 `Content` 탭에서 실제 비즈니스 식별자 확인
+   - API 예: `event_id = PAY-00000042`
+   - CSV 예: `event_id = STL-20260416014714873026-000030`
+6. 찾은 행의 `FlowFile UUID`를 복사한 뒤 다시 `Search Events`에서 `FlowFile UUID`로 재검색하면 같은 FlowFile branch만 좁혀 볼 수 있다.
+7. 검색 결과에서 원하는 이벤트 행의 우측 `⋮` 메뉴 클릭 → **Show Lineage** 선택
+
+NiFi 2.9.0 UI 메모:
+
+- 예전 설명처럼 별도 `Lineage` 버튼이 바로 보이지 않을 수 있다.
+- 검색 결과 행 오른쪽의 `⋮` 액션 메뉴 안에 `View Details`, `Show Lineage`, `Go To`가 들어 있다.
+- 상세 attribute와 이벤트 본문을 먼저 보고 싶으면 `View Details`, 전체 흐름을 시각적으로 따라가려면 `Show Lineage`를 선택한다.
+- 기본 `Search Events` 팝업에는 `event_id` 같은 사용자 정의 FlowFile attribute를 직접 입력하는 전용 칸이 보이지 않을 수 있다. 따라서 NiFi 2.9.0 기본 UI에서는 `Filename` 또는 `FlowFile UUID`로 먼저 좁히고, `Attributes`나 `Content`에서 `event_id`를 확인하는 절차가 더 현실적이다.
+
+시간 필터를 꼭 써야 할 때 빠른 변환 기준:
+
+- `KST = UTC + 9`
+- 한국시간에서 9시간을 빼면 UTC 검색 시각이 된다.
+- 예: `2026-04-16 10:00 KST` → `2026-04-16 01:00 UTC`
+- 예: Kafka 메시지의 `ingested_at = 2026-04-16T00:57:43Z` → 한국시간으로는 `2026-04-16 09:57:43 KST`
 
 **방법 2: 개별 FlowFile Provenance 추적**
 
 1. 임의의 Connection 큐 클릭 → **List queue**
 2. FlowFile 1개 선택 → **Provenance** 아이콘
 3. 해당 FlowFile의 전체 생명주기 이벤트 목록 확인
-4. **Lineage** 뷰에서 시각적 데이터 흐름 추적
+4. 이벤트 행의 `⋮` 메뉴에서 **Show Lineage** 선택
+5. Lineage 그래프에서 이벤트 노드를 더블클릭 또는 우클릭하여 상세 확인
+6. `FORK`, `CLONE` 같은 분기 이벤트에서는 우클릭 → **Find parents** 로 상위 FlowFile lineage를 확장
+7. 자식 FlowFile까지 더 보고 싶으면 우클릭 → **Expand**
+8. 좌하단 슬라이더를 왼쪽으로 움직이면 같은 lineage의 더 이른 시점을 볼 수 있다.
+
+> **분기 메모**: `SplitJson`, `SplitRecord`, `ValidateRecord` 이후에 생성된 child FlowFile에서 `Show Lineage`를 열면 마지막 구간만 짧게 보일 수 있다. 이 경우 `Find parents`를 반복하거나, 더 이른 `CREATE`, `FETCH`, `CONTENT_MODIFIED` 이벤트에서 다시 `Show Lineage`를 여는 것이 전체 흐름을 이해하기 쉽다.
 
 ### 5-3. Provenance 기반 감사 추적 시나리오
 
 ```bash
-cat > docs/provenance-audit-guide.md << 'EOF'
+cat > docs/nifi/provenance-audit-guide.md << 'EOF'
 # Nexus Pay 데이터 계보 추적 가이드 — 감사 대응용
 
 ## 감사 시나리오: "결제 이벤트 PAY-00000042의 출처를 증명하시오"
@@ -2277,15 +2319,41 @@ cat > docs/provenance-audit-guide.md << 'EOF'
    - 메시지의 `data_source` 필드 확인 → "payment-api"
 
 2. **NiFi Provenance에서 역추적**:
-   - Provenance 검색: FlowFile Attribute `event_id` = "PAY-00000042"
-   - SEND 이벤트 → 언제 Kafka로 전송되었는지 확인
-   - CONTENT_MODIFIED 이벤트 → 어떤 변환을 거쳤는지 확인
-   - CREATE 이벤트 → 원본 API 응답 시각·URL 확인
+   - `Search Events`에서 `Event Type = SEND`로 1차 조회
+   - 메인 목록 `Filter By = component name`, `Filter = PublishKafka [ingested-topic]`
+   - 각 후보 행의 `View Details -> Content`에서 `event_id = PAY-00000042` 확인
+   - 찾은 이벤트의 `FlowFile UUID`를 복사해 다시 `FlowFile UUID` 기준으로 재검색
+   - 같은 이벤트의 `Show Lineage` 실행
+   - Lineage 그래프에서 `FORK` 또는 `CLONE` 노드 우클릭 → `Find parents` 반복
+   - 최종적으로 `SplitJson`, `UpdateAttribute`, `ExecuteScript`, `JoltTransformJSON`, `EvaluateJsonPath`, `ValidateRecord`, `PublishKafka` 흐름과 상위 `InvokeHTTP` 수신 흔적까지 확인
+   - `Attributes`에서 `data_source = payment-api`, `source_system = nexuspay-payment-api` 확인
 
 3. **증빙 자료 구성**:
    - Provenance Lineage 스크린샷 (시각적 흐름도)
    - 각 이벤트의 타임스탬프·프로세서명·입출력 내용
    - 원본 API 응답 원문 (CREATE 이벤트의 Content 확인)
+
+## 실습 예시: 정산 레코드 `STL-20260416014714873026-000030`의 출처를 증명하시오
+
+### 추적 절차
+
+1. **원본 파일 기준 조회**:
+   - `Search Events`에서 `Filename = settlement_20260416014714873026.csv`
+   - 메인 목록에서 `Filter By = component name`, `Filter = PublishKafka`
+
+2. **표준 이벤트 확인**:
+   - 후보 `SEND` 이벤트의 `View Details -> Attributes` 또는 `Content`에서 `event_id = STL-20260416014714873026-000030` 확인
+   - `data_source = settlement-csv`, `source_system = nexuspay-settlement-file` 확인
+
+3. **Lineage 확장**:
+   - 같은 행에서 `Show Lineage`
+   - 그래프의 `FORK / SplitRecord` 또는 상위 분기 이벤트에서 `Find parents` 반복
+   - 최종적으로 `ListFile -> FetchFile -> ConvertRecord -> SplitRecord -> UpdateAttribute -> ExecuteScript -> JoltTransformJSON -> EvaluateJsonPath -> ValidateRecord -> PublishKafka` 흐름 확인
+
+4. **필드 매핑 해석**:
+   - 원본 CSV의 `settlement_id = STL-20260416014714873026-000030`
+   - `JoltTransformJSON` 이후 표준 스키마에서 같은 값이 `event_id`로 매핑됨
+   - 따라서 Kafka와 Provenance 후반부에서는 `settlement_id` 대신 `event_id` 기준으로 추적하면 된다.
 
 ### 보존 설정
 
@@ -2307,6 +2375,8 @@ nifi.provenance.repository.indexed.fields=EventType,FlowFileUUID,Filename,Proces
 nifi.provenance.repository.indexed.attributes=event_id,user_id,data_source,event_type
 ```
 
+> **설정 메모**: `nifi.provenance.repository.indexed.attributes`는 Provenance 저장소의 인덱싱 대상 attribute를 정의한다. 다만 NiFi 2.9.0 기본 `Search Events` 팝업이 모든 custom attribute 입력칸을 자동으로 노출하는 것은 아니므로, UI에서는 여전히 `Filename` 또는 `FlowFile UUID`로 먼저 찾고 `Attributes`/`Content`에서 `event_id`를 확인하는 절차가 필요할 수 있다.
+
 EOF
 ```
 
@@ -2315,7 +2385,7 @@ EOF
 NiFi에서 운영 중 발생하는 경고·오류를 추적하는 모니터링 체계를 설정한다.
 
 ```bash
-cat > docs/nifi-monitoring-guide.md << 'EOF'
+cat > docs/nifi/nifi-monitoring-guide.md << 'EOF'
 # Nexus Pay NiFi 모니터링 가이드
 
 ## 핵심 모니터링 지표
@@ -2410,7 +2480,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --topic nexuspay.events.ingested \
   --from-beginning \
   --timeout-ms 10000 2>/dev/null | \
-python3 -c "
+python -c "
 import sys, json
 from collections import Counter
 sources = Counter()
@@ -2468,10 +2538,50 @@ bash scripts/verify_nifi_pipeline.sh
 ============================================
 ```
 
+실제 검증 예시 (2026-04-16):
+
+```text
+============================================
+ Nexus Pay NiFi 파이프라인 종합 검증
+ 2026-04-16 14:23:11
+============================================
+
+[1. 인프라 서비스]
+  NiFi 웹 UI                         : ✅ OK
+  결제 API 시뮬레이터               : ✅ OK
+  PostgreSQL (고객 테이블)          : ✅ OK
+  Kafka 클러스터                    : ✅ OK
+
+[2. Kafka 토픽]
+  nexuspay.events.ingested 토픽     : ✅ OK
+  nexuspay.events.dlq 토픽          : ✅ OK
+
+[3. 데이터 흐름 검증]
+  API 소스 메시지                   : ✅ OK
+  CSV 소스 메시지                   : ✅ OK
+  DB 소스 메시지                    : ✅ OK
+
+[4. 소스별 메시지 통계]
+  customer-db: 45건
+  payment-api: 20건
+  settlement-csv: 110건
+  합계: 175건
+
+============================================
+ 결과: ✅ 9 통과 / ❌ 0 실패
+============================================
+```
+
+검증 해석:
+
+- `verify_nifi_pipeline.sh` 기준 필수 검증 9개 항목이 모두 통과했다.
+- 세 소스(API, CSV, DB)의 메시지가 모두 `nexuspay.events.ingested` 토픽에서 확인되었다.
+- 메시지 통계는 Kafka 누적 보존 데이터 기준이므로, 실습을 반복할수록 총건수는 증가할 수 있다.
+
 ### 5-6. 데이터 흐름 아키텍처 문서 작성
 
 ```bash
-cat > docs/nifi-architecture.md << 'EOF'
+cat > docs/nifi/nifi-architecture.md << 'EOF'
 # Nexus Pay NiFi 데이터 수집 아키텍처
 
 ## 아키텍처 개요
@@ -2590,12 +2700,13 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 
 ## Week 3 산출물 체크리스트
 
-현재 완료 현황: 17개 항목 중 10개 완료.
+현재 완료 현황: 17개 항목 중 16개 완료.
 
 현재 확인 기준:
 - Day 2 완료: 확인됨
 - Day 3 완료: `PG-2` 파일 수집 플로우 정상 작동, `PG-3` DB 증분 수집 검증 완료, `PG-1`·`PG-2`·`PG-3` 세 소스가 `PG-4`의 `api-in-check`·`file-in-check`·`db-in-check`로 동시에 유입되는 것까지 확인됨.
-- Day 4 완료: `payment-api` 20건, `settlement-csv` 30건, `customer-db` 30건이 `nexuspay.events.ingested`에 적재되는 것 확인, 불량 CSV 2건이 `nexuspay.events.dlq`로 라우팅되는 것 확인.
+- Day 4 완료: `payment-api` 20건, `settlement-csv` 110건, `customer-db` 45건이 `nexuspay.events.ingested`에 누적 적재되는 것 확인, 불량 CSV 2건이 `nexuspay.events.dlq`로 라우팅되는 것 확인.
+- Day 5 문서 산출물: `docs/nifi/provenance-audit-guide.md`, `docs/nifi/nifi-monitoring-guide.md`, `docs/nifi/nifi-architecture.md` 생성 및 가이드 참조 경로 반영 완료.
 
 | # | 산출물 | 완료 |
 |---|--------|------|
@@ -2605,14 +2716,14 @@ git commit -m "Week 3: NiFi 다중 소스 수집 — API·CSV·DB → 스키마 
 | 4 | scripts/nifi/csv_settlement_generator.py (정산 CSV 생성기) | ☑ |
 | 5 | scripts/nifi/init-customers.sql (고객 마스터 테이블) | ☑ |
 | 6 | config/nifi/jolt-spec-api-payment.json (API Jolt 스펙) | ☑ |
-| 7 | config/nifi/jolt-spec-file-settlement.json (CSV Jolt 스펙) | ☐ |
-| 8 | config/nifi/jolt-spec-db-customer.json (DB Jolt 스펙) | ☐ |
+| 7 | config/nifi/jolt-spec-file-settlement.json (CSV Jolt 스펙) | ☑ |
+| 8 | config/nifi/jolt-spec-db-customer.json (DB Jolt 스펙) | ☑ |
 | 9 | config/nifi/nexuspay-standard-schema.avsc (표준 Avro 스키마) | ☑ |
 | 10 | scripts/nifi/measure_api_throughput.sh (API 처리량 측정 스크립트) | ☑ |
-| 11 | scripts/verify_nifi_pipeline.sh (종합 검증 스크립트) | ☐ |
-| 12 | docs/provenance-audit-guide.md (Provenance 감사 추적 가이드) | ☐ |
-| 13 | docs/nifi-monitoring-guide.md (NiFi 모니터링 가이드) | ☐ |
-| 14 | docs/nifi-architecture.md (데이터 흐름 아키텍처 문서) | ☐ |
+| 11 | scripts/verify_nifi_pipeline.sh (종합 검증 스크립트) | ☑ |
+| 12 | docs/nifi/provenance-audit-guide.md (Provenance 감사 추적 가이드) | ☑ |
+| 13 | docs/nifi/nifi-monitoring-guide.md (NiFi 모니터링 가이드) | ☑ |
+| 14 | docs/nifi/nifi-architecture.md (데이터 흐름 아키텍처 문서) | ☑ |
 | 15 | docker-compose.yml 업데이트 (payment-api, NiFi 볼륨) | ☑ |
 | 16 | NiFi 플로우 (5개 프로세서 그룹 구성 완료) | ☑ |
 | 17 | Git 커밋 | ☐ |

@@ -293,6 +293,14 @@ docker-compose.yml의 services 섹션에 추가:
 
 NiFi 2.9.0은 기본적으로 HTTPS `8443`로 기동한다. `https://localhost:8443/nifi/` 접속 시 브라우저 경고를 줄이고, 실습 중 클라이언트 인증서 선택 창 없이 접속하려면 회사 PC에서 직접 `mkcert` 기반 로컬 CA와 `localhost` 인증서를 준비하는 편이 가장 안정적이다.
 
+가장 빠른 방법은 저장소에 포함된 재생성 스크립트를 사용하는 것이다.
+
+```bash
+bash scripts/nifi/regenerate_local_tls.sh
+```
+
+이 스크립트는 현재 PC의 `mkcert` 로컬 CA를 기준으로 `config/nifi/tls` 아래 `localhost` 인증서와 NiFi용 `PKCS#12` 파일을 다시 만든다. 예전 클론에서 다른 PC에서 생성된 인증서가 남아 있으면 `NET::ERR_CERT_AUTHORITY_INVALID`가 발생할 수 있으므로, 이 경우에도 같은 스크립트를 다시 실행하면 된다.
+
 **1. `mkcert` 설치 및 로컬 CA 생성**
 
 ```bash
@@ -459,6 +467,13 @@ curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "Ni
 ```
 
 브라우저에서 `https://localhost:8443/nifi/` 접속한다. `mkcert -install`과 `localhost` 인증서를 올바르게 준비했다면 일반적인 서버 인증서 경고 없이 접속할 수 있다. 로그인 화면이 나타나면 `.env`의 `NIFI_USERNAME / NIFI_PASSWORD` 값으로 로그인한다. 이미 `NiFi Flow` 캔버스가 바로 보이면 인증 세션이 유지된 상태이므로 추가 로그인 없이 진행하면 된다.
+
+만약 브라우저가 `NET::ERR_CERT_AUTHORITY_INVALID`를 표시하면, 현재 PC가 신뢰하지 않는 다른 환경의 인증서가 `config/nifi/tls`에 남아 있을 가능성이 높다. 아래 순서로 복구한다.
+
+```bash
+bash scripts/nifi/regenerate_local_tls.sh
+docker compose restart nifi
+```
 
 만약 브라우저가 `localhost:8443` 접속 시 `인증서 선택` 팝업을 띄우면, 이는 서버가 클라이언트 인증서를 요구하는 상태다. 아래 순서로 확인한다.
 
