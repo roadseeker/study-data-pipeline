@@ -65,6 +65,5 @@ tmp/
 temp/
 
 # --- Local NiFi TLS artifacts ---
-config/nifi/tls/*.pem
-config/nifi/tls/*-key.pem
-config/nifi/tls/*.p12
+config/nifi/tls/*
+!config/nifi/tls/README.md

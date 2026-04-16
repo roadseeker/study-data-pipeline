@@ -1,0 +1,33 @@
+[
+  {
+    "operation": "shift",
+    "spec": {
+      "settlement_id": "event_id",
+      "settlement_type": "event_type",
+      "merchant_id": "merchant_id",
+      "merchant_name": "merchant_name",
+      "merchant_category": "merchant_category",
+      "gross_amount": "amount",
+      "fee_amount": "fee_amount",
+      "net_amount": "net_amount",
+      "currency": "currency",
+      "tx_count": "tx_count",
+      "settlement_date": "event_timestamp",
+      "status": "status",
+      "batch_id": "batch_id",
+      "created_at": "created_at"
+    }
+  },
+  {
+    "operation": "default",
+    "spec": {
+      "data_source": "settlement-csv",
+      "source_system": "${source_system}",
+      "schema_version": "1.0",
+      "ingested_at": "${ingested_at}",
+      "channel": "BATCH",
+      "is_suspicious": false,
+      "user_id": null
+    }
+  }
+]

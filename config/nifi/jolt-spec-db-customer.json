@@ -1,0 +1,40 @@
+[
+  {
+    "operation": "shift",
+    "spec": {
+      "customer_id": "event_id",
+      "user_id": "user_id",
+      "name": "customer_name",
+      "email": "customer_email",
+      "phone": "customer_phone",
+      "grade": "customer_grade",
+      "is_active": "is_active",
+      "created_at": "created_at",
+      "updated_at": "event_timestamp"
+    }
+  },
+  {
+    "operation": "modify-overwrite-beta",
+    "spec": {
+      "event_id": "=toString(@(1,event_id))"
+    }
+  },
+  {
+    "operation": "default",
+    "spec": {
+      "event_type": "CUSTOMER_UPDATE",
+      "data_source": "customer-db",
+      "source_system": "${source_system}",
+      "schema_version": "1.0",
+      "ingested_at": "${ingested_at}",
+      "channel": "DB_SYNC",
+      "status": null,
+      "currency": null,
+      "amount": null,
+      "is_suspicious": false,
+      "merchant_id": null,
+      "merchant_name": null,
+      "merchant_category": null
+    }
+  }
+]
