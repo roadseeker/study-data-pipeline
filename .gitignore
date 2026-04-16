@@ -64,6 +64,7 @@ webserver_config.py
 # --- Local temp ---
 tmp/
 temp/
+*.bak
 
 # --- Local NiFi TLS artifacts ---
 config/nifi/tls/*
