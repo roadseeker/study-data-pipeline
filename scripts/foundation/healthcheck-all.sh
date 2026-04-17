@@ -76,9 +76,9 @@ check_retry "NiFi" "curl -skf https://localhost:8443/nifi/" 5 5
 echo ""
 echo "[처리·오케스트레이션]"
 check "Flink JobManager" "curl -sf http://localhost:8081/overview"
-check "Flink TaskManager" "curl -sf http://localhost:8081/overview | python -c \"import sys, json; data = json.load(sys.stdin); raise SystemExit(0 if data.get('taskmanagers', 0) >= 1 else 1)\""
+check "Flink TaskManager" "curl -sf http://localhost:8081/overview | python3 -c \"import sys, json; data = json.load(sys.stdin); raise SystemExit(0 if data.get('taskmanagers', 0) >= 1 else 1)\""
 check "Spark Master" "curl -sf http://localhost:8082/"
-check "Spark Worker" "curl -sf http://localhost:8082/json/ | python -c \"import sys, json; data = json.load(sys.stdin); workers = data.get('workers', []); alive = [w for w in workers if w.get('state') == 'ALIVE']; raise SystemExit(0 if len(alive) >= 1 else 1)\""
+check "Spark Worker" "curl -sf http://localhost:8082/json/ | python3 -c \"import sys, json; data = json.load(sys.stdin); workers = data.get('workers', []); alive = [w for w in workers if w.get('state') == 'ALIVE']; raise SystemExit(0 if len(alive) >= 1 else 1)\""
 check_retry "Airflow" "curl -sf http://localhost:8083/health" 5 5
 
 echo ""

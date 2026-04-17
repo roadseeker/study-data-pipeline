@@ -34,12 +34,13 @@ Week 4 착수 전 이 이슈는 다음 기준으로 정상화되었다.
 | 저장소 | 작업 트리 상태 | Week 4 준비용 의도된 변경만 존재 | `git status --short` |
 | 컨테이너 | 핵심 서비스 기동 상태 | 주요 서비스가 `Up` 또는 `healthy` | `docker ps --format "table {{.Names}}\t{{.Status}}"` |
 | NiFi | Web UI 접근 | `https://localhost:8443/nifi/` 접속 가능 | 브라우저 또는 `curl -skI https://localhost:8443/nifi/` |
-| NiFi | Docker healthcheck | `healthy` | `docker inspect lab-nifi --format '{{json .State.Health}}'` |
+| NiFi | Docker healthcheck | `healthy` | `docker inspect lab-nifi --format '{{.State.Health.Status}}'` |
 | NiFi | HTTPS bind 설정 | `nifi.web.https.host=0.0.0.0` | `docker exec lab-nifi sh -lc 'grep -E "^nifi.web.https.host=|^nifi.web.proxy.host=" /opt/nifi/nifi-current/conf/nifi.properties'` |
 | Kafka | Week 3 입력 토픽 | `nexuspay.events.ingested`, `nexuspay.events.dlq` 존재 | `kafka-topics.sh --describe` |
 | Kafka | 입력 이벤트 확인 | 샘플 이벤트 1건 이상 조회 가능 | `kafka-console-consumer.sh --max-messages 5` |
 | Flink | 클러스터 기준선 | `taskmanagers=1`, `slots-total=4`, `jobs-running=0` | `curl -s http://localhost:8081/overview` |
-| Flink | 출력 경로 준비 | `data/flink/checkpoints`, `data/flink/savepoints` 존재 | `ls -la data/flink` |
+| Flink | 출력 경로 준비 | `data/flink/usrlib`, `data/flink/checkpoints`, `data/flink/savepoints` 존재 | `ls -la data/flink` |
+| Flink | 배포용 JAR 준비 | `data/flink/usrlib/flink-jobs-1.0.0.jar` 확인 가능 | `ls -la data/flink/usrlib` |
 | Kafka | Week 4 출력 토픽 | 집계·알림 토픽 존재 | `kafka-topics.sh --describe` |
 | 운영 보조 | Spark / Airflow 상태 | 접근 가능 또는 healthy | `curl -s http://localhost:8082/`, `curl -s http://localhost:8083/health` |
 
@@ -52,7 +53,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
 ```bash
-docker inspect lab-nifi --format '{{json .State.Health}}'
+docker inspect lab-nifi --format '{{.State.Health.Status}}'
 docker exec lab-nifi sh -lc 'grep -E "^nifi.web.https.host=|^nifi.web.https.port=|^nifi.web.proxy.host=" /opt/nifi/nifi-current/conf/nifi.properties'
 docker exec lab-nifi sh -lc 'curl -skI -o /dev/null -w "HTTP:%{http_code} EXIT:%{exitcode}\n" https://localhost:8443/nifi/'
 ```
@@ -99,7 +100,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-
 - `lab-nifi`가 `healthy`이고 내부 HTTPS healthcheck가 성공한다.
 - `nexuspay.events.ingested` 토픽에서 Week 3 표준화 이벤트를 조회할 수 있다.
 - Flink overview 값이 `taskmanagers=1`, `slots-total=4`, `jobs-running=0` 기준선을 만족한다.
-- Week 4 출력 토픽과 체크포인트 저장 경로가 준비되어 있다.
+- Week 4 출력 토픽과 JAR·체크포인트 저장 경로가 준비되어 있다.
 - 작업 트리에 의도하지 않은 변경이 없다.
 
 ### No-Go
@@ -107,7 +108,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-
 - NiFi가 `unhealthy`이거나 내부 `localhost:8443` 헬스체크가 실패한다.
 - Kafka 입력 토픽이 없거나 샘플 이벤트가 조회되지 않는다.
 - Flink 클러스터가 비정상 상태이거나 이미 실행 중인 잡이 남아 있다.
-- 출력 토픽 또는 체크포인트 경로가 준비되지 않았다.
+- 출력 토픽 또는 JAR·체크포인트 경로가 준비되지 않았다.
 - 환경 수정 이력이 있으나 반영 결과가 검증되지 않았다.
 
 ## 운영 권고

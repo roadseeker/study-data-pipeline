@@ -301,7 +301,7 @@ docker-compose.yml의 services 섹션에 추가:
     command: >
       bash -lc "
         pip install --no-cache-dir flask &&
-        python api_payment_simulator.py
+        python3 api_payment_simulator.py
       "
     volumes:
       - ./scripts/nifi:/app
@@ -313,7 +313,7 @@ docker-compose.yml의 services 섹션에 추가:
       test:
         [
           "CMD",
-          "python",
+          "python3",
           "-c",
           "import urllib.request; urllib.request.urlopen('http://localhost:5050/health', timeout=3)"
         ]
@@ -552,7 +552,7 @@ curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | jq
 mkdir -p data/nifi/settlement
 
 # CSV 파일 1개 사전 생성 (테스트용)
-python scripts/nifi/csv_settlement_generator.py -n 1 -r 20
+python3 scripts/nifi/csv_settlement_generator.py -n 1 -r 20
 
 # 생성된 파일 확인
 head -5 data/nifi/settlement/settlement_*.csv
@@ -594,7 +594,7 @@ curl -skf https://localhost:8443/nifi/ > /dev/null && echo "NiFi OK" || echo "Ni
 > `jq`를 바로 사용할 수 없는 환경에서는 아래 Python 대체 명령을 사용한다.
 >
 > ```bash
-> curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | python -c "import sys, json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
+> curl -s "http://localhost:5050/api/v1/payments/recent?count=3" | python3 -c "import sys, json; print(json.dumps(json.load(sys.stdin), ensure_ascii=False, indent=2))"
 > ```
 
 > **NiFi 볼륨 마운트 추가**: docker-compose.yml의 nifi 서비스에 정산 CSV 디렉토리와 API 네트워크 접근을 위한 볼륨을 추가한다.
@@ -1472,7 +1472,7 @@ EOF
 
 ```bash
 # CSV 파일 3개 생성 (30초 간격)
-python scripts/nifi/csv_settlement_generator.py -n 3 -r 30 -i 30
+python3 scripts/nifi/csv_settlement_generator.py -n 3 -r 30 -i 30
 
 # NiFi UI에서:
 # 1. PG-2: File Ingestion 내 모든 프로세서 시작
@@ -1941,7 +1941,7 @@ bash scripts/nifi/simulate_customer_updates.sh 30 5
 #   PG-3 Output Port: DB 고객 변경분 (60초마다 증분)
 
 # CSV 파일 추가 생성으로 PG-2 트리거
-python scripts/nifi/csv_settlement_generator.py -n 2 -r 25 -i 10
+python3 scripts/nifi/csv_settlement_generator.py -n 2 -r 25 -i 10
 ```
 
 **Day 3 완료 기준**: `PG-2`, `PG-3` 모두 `UpdateAttribute → ExecuteScript → JoltTransformJSON → EvaluateJsonPath` 공통 후반부가 정상 작동하고, 각 Output Port 직전 FlowFile Attribute에 `event_id`, `event_type`, `event_timestamp`, `data_source`, `source_system`가 포함되며, CSV 처리 완료 파일 이동과 DB 증분 추출까지 함께 확인한 상태.
@@ -2122,7 +2122,7 @@ Input Port [invalid-data] ──→ PublishKafka [dlq-topic]
 # 2) 데이터 소스 활성화
 # API: 자동 (30초 주기)
 # CSV: 파일 생성
-python scripts/nifi/csv_settlement_generator.py -n 2 -r 30 -i 15
+python3 scripts/nifi/csv_settlement_generator.py -n 2 -r 30 -i 15
 # DB: 레코드 변경
 docker exec lab-postgres psql -U pipeline -d pipeline_db -c "
   UPDATE customers SET grade = 'VIP', updated_at = NOW() WHERE user_id BETWEEN 101 AND 105;
@@ -2144,7 +2144,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --topic nexuspay.events.ingested \
   --from-beginning \
   --timeout-ms 10000 2>/dev/null | \
-  python -c "
+  python3 -c "
 import sys, json
 from collections import Counter
 sources = Counter()
@@ -2480,7 +2480,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --topic nexuspay.events.ingested \
   --from-beginning \
   --timeout-ms 10000 2>/dev/null | \
-python -c "
+python3 -c "
 import sys, json
 from collections import Counter
 sources = Counter()

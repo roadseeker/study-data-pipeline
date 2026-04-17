@@ -553,7 +553,7 @@ if __name__ == "__main__":
 
 ```bash
 # 거래 100건 생성 (상세 모드)
-python scripts/kafka/producer_nexuspay.py -n 100 --delay 0.05 --verbose
+python3 scripts/kafka/producer_nexuspay.py -n 100 --delay 0.05 --verbose
 
 # 파티션별 메시지 분포 확인
 # Apache Kafka 3.7 이미지에서는 GetOffsetShell 직접 호출보다 kafka-get-offsets.sh 사용을 권장
@@ -650,7 +650,7 @@ for p in sorted(partition_user_counts.keys()):
 ```
 
 ```bash
-python scripts/kafka/verify_partition_key.py
+python3 scripts/kafka/verify_partition_key.py
 ```
 
 기대 출력:
@@ -674,7 +674,7 @@ python scripts/kafka/verify_partition_key.py
 **Day 2 완료 기준**: 프로듀서로 거래 100건 전송 완료, 파티션별 분포 확인, 동일 user_id → 동일 파티션 배치 검증 통과.
 
 > **진행 기록 (2026-04-06)**: Day 2 완료.  
-> 완료 항목: `scripts/kafka/producer_nexuspay.py`, `scripts/kafka/verify_partition_key.py` 작성 및 `python scripts/kafka/verify_partition_key.py` 실행으로 동일 `user_id`의 단일 파티션 배치 검증 통과 확인.
+> 완료 항목: `scripts/kafka/producer_nexuspay.py`, `scripts/kafka/verify_partition_key.py` 작성 및 `python3 scripts/kafka/verify_partition_key.py` 실행으로 동일 `user_id`의 단일 파티션 배치 검증 통과 확인.
 
 ---
 
@@ -971,13 +971,13 @@ if __name__ == "__main__":
 
 ```bash
 # 터미널 1: 이상거래 탐지 컨슈머
-python scripts/kafka/consumer_fraud_detection.py --instance 1
+python3 scripts/kafka/consumer_fraud_detection.py --instance 1
 
 # 터미널 2: 정산 컨슈머
-python scripts/kafka/consumer_settlement.py
+python3 scripts/kafka/consumer_settlement.py
 
 # 터미널 3: 프로듀서 — 새 거래 500건 생성
-python scripts/kafka/producer_nexuspay.py -n 500 --delay 0.02
+python3 scripts/kafka/producer_nexuspay.py -n 500 --delay 0.02
 ```
 
 ### 3-5. 컨슈머 그룹 상태 확인
@@ -1015,7 +1015,7 @@ fraud-detection  nexuspay.transactions.payment      2          45              4
 # 터미널 1: 이미 실행 중인 fraud 컨슈머 인스턴스 1
 
 # 터미널 4: 두 번째 인스턴스 추가 — 리밸런싱 발생
-python scripts/kafka/consumer_fraud_detection.py --instance 2
+python3 scripts/kafka/consumer_fraud_detection.py --instance 2
 
 # 양쪽 터미널에서 "리밸런싱" 로그 관찰
 # → 파티션이 2개 인스턴스로 재분배됨
@@ -1045,7 +1045,7 @@ docker exec lab-kafka sh -c '/opt/kafka/bin/kafka-consumer-groups.sh \
   --execute'
 
 # 다시 컨슈머 실행 → 모든 메시지 재처리 확인
-python scripts/kafka/consumer_fraud_detection.py --instance 1
+python3 scripts/kafka/consumer_fraud_detection.py --instance 1
 ```
 
 **Day 3 완료 기준**: 두 컨슈머 그룹이 동시에 같은 메시지를 독립 소비하는 것 확인, 수동 오프셋 커밋 동작 확인, 리밸런싱 관찰, 오프셋 리셋 후 재처리 확인.
@@ -1252,7 +1252,7 @@ BROKER = "localhost:30092,localhost:30093,localhost:30094"
 
 ```bash
 # 멀티 브로커 환경에서 거래 300건 전송
-python scripts/kafka/producer_nexuspay.py -n 300 --delay 0.02
+python3 scripts/kafka/producer_nexuspay.py -n 300 --delay 0.02
 
 # 파티션별 리더 분산 확인 — 트래픽이 3개 브로커에 분산되는지 확인
 docker exec lab-kafka-1 sh -c '/opt/kafka/bin/kafka-topics.sh \
@@ -1299,11 +1299,11 @@ docker exec lab-kafka-1 sh -c '/opt/kafka/bin/kafka-topics.sh \
 
 ```bash
 # 브로커 2가 중단된 상태에서 메시지 전송 — 정상 작동해야 함
-python scripts/kafka/producer_nexuspay.py -n 50 --delay 0.02
+python3 scripts/kafka/producer_nexuspay.py -n 50 --delay 0.02
 # 기대: acks=all + min.insync.replicas=2 → 나머지 2대로 정상 전송
 
 # 컨슈머도 정상 동작 확인
-timeout 10 python scripts/kafka/consumer_fraud_detection.py --instance 1
+timeout 10 python3 scripts/kafka/consumer_fraud_detection.py --instance 1
 ```
 
 ### 5-3. 장애 시나리오 B — 2대 동시 장애 (서비스 불가 확인)
@@ -1314,7 +1314,7 @@ docker stop lab-kafka-3
 
 echo ""
 echo "=== 프로듀서 전송 시도 ==="
-python scripts/kafka/producer_nexuspay.py -n 5 --delay 1
+python3 scripts/kafka/producer_nexuspay.py -n 5 --delay 1
 # 기대: min.insync.replicas=2 미충족 → 전송 실패(NotEnoughReplicas)
 
 echo ""
