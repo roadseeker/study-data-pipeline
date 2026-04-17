@@ -740,7 +740,7 @@ pipeline-lab/
 │       └── master_refresh.py                   (W7) 마스터 테이블 Full Refresh (Airflow 연계)
 │
 ├── flink-jobs/                                 ── Week 4 실시간 스트림 처리 ──
-│   ├── pom.xml                                 (W4) Maven 빌드 설정 (Flink 1.18.1, Kafka 커넥터)
+│   ├── pom.xml                                 (W4) Maven 빌드 설정 (Flink 1.20.3 LTS, Java 11, Kafka 커넥터)
 │   └── src/main/java/com/nexuspay/flink/
 │       ├── job/
 │       │   ├── TransactionAggregationJob.java  (W4) 5분 윈도우 거래 집계
@@ -913,5 +913,3 @@ pipeline-lab/
 *본 보고서는 2026년 3월 기준 시장 데이터와 기술 역량 분석을 바탕으로 작성되었습니다.*
 
 *주요 출처: 과기정통부·KDATA 「2024 데이터산업현황조사」 / CIO Korea 「2026 IT 전망 조사」 / Deloitte 「2026 TMT 전망 보고서」 / 한국지능정보사회진흥원 「2026년 AI 전망 분석」 / Fortune Business Insights 「AI 컨설팅 서비스 시장 분석」*
-
-
