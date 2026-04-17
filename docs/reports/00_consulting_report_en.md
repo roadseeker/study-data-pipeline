@@ -755,7 +755,7 @@ pipeline-lab/
 │       └── master_refresh.py                   (W7) Master table full refresh for Airflow integration
 │
 ├── flink-jobs/                                 -- Week 4 real-time stream processing --
-│   ├── pom.xml                                 (W4) Maven build settings (Flink 1.20.3 LTS, Java 11, Kafka connector)
+│   ├── pom.xml                                 (W4) Maven build settings (Flink 2.2.0, Java 17, Kafka connector 4.0.1-2.0)
 │   └── src/main/java/com/nexuspay/flink/
 │       ├── job/
 │       │   ├── TransactionAggregationJob.java  (W4) Five-minute window transaction aggregation

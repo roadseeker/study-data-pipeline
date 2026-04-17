@@ -740,7 +740,7 @@ pipeline-lab/
 │       └── master_refresh.py                   (W7) 마스터 테이블 Full Refresh (Airflow 연계)
 │
 ├── flink-jobs/                                 ── Week 4 실시간 스트림 처리 ──
-│   ├── pom.xml                                 (W4) Maven 빌드 설정 (Flink 1.20.3 LTS, Java 11, Kafka 커넥터)
+│   ├── pom.xml                                 (W4) Maven 빌드 설정 (Flink 2.2.0, Java 17, Kafka 커넥터 4.0.1-2.0)
 │   └── src/main/java/com/nexuspay/flink/
 │       ├── job/
 │       │   ├── TransactionAggregationJob.java  (W4) 5분 윈도우 거래 집계

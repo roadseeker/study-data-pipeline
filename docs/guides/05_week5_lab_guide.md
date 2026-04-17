@@ -615,7 +615,7 @@ PYEOF
 ```
 
 ```bash
-cd spark-etl && python scripts/generate_sample_data.py
+cd spark-etl && python3 scripts/generate_sample_data.py
 ```
 
 ### 1-7. Kafka 배치 읽기 연동 테스트

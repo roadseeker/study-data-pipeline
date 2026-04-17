@@ -81,6 +81,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
@@ -114,6 +115,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
@@ -147,6 +149,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
@@ -231,9 +234,14 @@ services:
 
   # ──────────────────────────────────────
   # Flink — 실시간 스트림 처리
+  # 2026-04-17: Flink 2.2.0 업그레이드
+  #   - 이미지: flink:1.20.3-scala_2.12-java11 → flink:2.2.0-java17
+  #   - Scala API 제거로 scala_2.12 접미사 삭제
+  #   - Java 11 → Java 17 (2.x 권장 런타임)
+  #   - FLINK_PROPERTIES 방식은 2.x에서도 지속 지원
   # ──────────────────────────────────────
   flink-jobmanager:
-    image: flink:1.20.3-scala_2.12-java11
+    image: flink:2.2.0-java17
     container_name: lab-flink-jm
     command: jobmanager
     environment:
@@ -243,6 +251,12 @@ services:
         parallelism.default: 2
     ports:
       - "8081:8081"
+    volumes:
+      # Week 4: 배포용 JAR만 보관하는 전용 디렉터리 공유
+      - ./data/flink/usrlib:/opt/flink/usrlib
+      # Week 4: 체크포인트/세이브포인트 실파일을 호스트에 영속화 (file:///opt/flink/checkpoints)
+      - ./data/flink/checkpoints:/opt/flink/checkpoints
+      - ./data/flink/savepoints:/opt/flink/savepoints
     networks:
       - pipeline-net
     healthcheck:
@@ -252,7 +266,7 @@ services:
       retries: 10
 
   flink-taskmanager:
-    image: flink:1.20.3-scala_2.12-java11
+    image: flink:2.2.0-java17
     container_name: lab-flink-tm
     command: taskmanager
     environment:
@@ -260,6 +274,11 @@ services:
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 4
         parallelism.default: 2
+    volumes:
+      # JobManager와 동일 경로로 배포용 JAR/체크포인트 공유 — TaskManager가 상태를 기록·복구할 수 있어야 한다
+      - ./data/flink/usrlib:/opt/flink/usrlib
+      - ./data/flink/checkpoints:/opt/flink/checkpoints
+      - ./data/flink/savepoints:/opt/flink/savepoints
     depends_on:
       flink-jobmanager:
         condition: service_healthy
@@ -382,9 +401,4 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES}
       _PIP_ADDITIONAL_REQUIREMENTS: "redis confluent-kafka"
     volumes:
-      - ./dags:/opt/airflow/dags
-    depends_on:
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      - pipeline-net
+      - ./dags:/opt/airflow/
