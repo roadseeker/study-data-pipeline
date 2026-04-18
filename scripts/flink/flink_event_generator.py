@@ -27,6 +27,12 @@ STATUSES = ["COMPLETED", "COMPLETED", "COMPLETED", "PENDING", "FAILED"]
 
 def create_event(user_id=None, event_type=None, amount=None, timestamp=None):
   """단일 Nexus Pay 이벤트 생성."""
+  event_timestamp = timestamp or datetime.now(timezone.utc)
+  if isinstance(event_timestamp, str):
+    formatted_timestamp = event_timestamp
+  else:
+    formatted_timestamp = event_timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+
   return {
       "event_id": str(uuid.uuid4()),
       "event_type": event_type or random.choice(EVENT_TYPES),
@@ -35,7 +41,7 @@ def create_event(user_id=None, event_type=None, amount=None, timestamp=None):
       "currency": random.choice(CURRENCIES),
       "status": random.choice(STATUSES),
       "data_source": "payment-api",
-      "event_timestamp": (timestamp or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+      "event_timestamp": formatted_timestamp,
       "schema_version": "1.0"
   }
 
