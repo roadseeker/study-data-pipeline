@@ -1,13 +1,14 @@
 package com.nexuspay.flink.job;
 
 
-import com.nexuspay.flink.model.NexusPayEvent;
 import com.nexuspay.flink.util.NexusPayEventDeserializer;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
+import com.nexuspay.flink.model.NexusPayEvent;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -60,7 +61,7 @@ public class TransactionAggregationJob {
         DataStream<NexusPayEvent> transactionDataStream = eventDataStream.filter(event -> {
                     String type = event.getEventType();
                     return "PAYMENT".equals(type) || "TRANSFER".equals(type)
-                            || "WITHDRAW".equals(type) || "SETTLEMENT".equals(type);
+                            || "WITHDRAWAL".equals(type) || "SETTLEMENT".equals(type);
                 })
                 .name("Filter Transaction Events");
 
