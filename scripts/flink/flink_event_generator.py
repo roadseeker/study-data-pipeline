@@ -49,8 +49,8 @@ def generate_normal(producer, count=100, interval=0.5):
     if (i + 1) % 10 == 0:
       print(f"  ... {i + 1}/{count}건 전송")
     time.sleep(interval)
-    producer.flush()
-    print(f"[NORMAL] {count}건 전송 완료")
+  producer.flush()
+  print(f"[NORMAL] {count}건 전송 완료")
 
 def generate_fraud(producer, count=50):
   """이상거래 패턴 포함 이벤트 생성."""

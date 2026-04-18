@@ -1,7 +1,7 @@
 package com.nexuspay.flink.model;
 
+import java.io.Serial;
 import java.io.Serializable;
-
 
 /**
  * Nexus Pay 표준 이벤트 모델.
@@ -18,7 +18,8 @@ import java.io.Serializable;
  *   event_timestamp — 이벤트 발생 시각 (ISO 8601)
  *   schema_version — 스키마 버전
  */
-public class NexusPayEvent {
+public class NexusPayEvent implements Serializable {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private String eventId;
@@ -29,7 +30,7 @@ public class NexusPayEvent {
     private String status;
     private String dataSource;
     private String eventTimestamp; // ISO 8601: "2026-04-07T14:30:00Z"
-    private String schemaVersion; //
+    private String schemaVersion; // 스키마 버전
     // NiFi 표준 스키마의 추가 필드 (merchant, channel, 이상거래 플래그)
     private String merchantId;
     private String merchantName;
