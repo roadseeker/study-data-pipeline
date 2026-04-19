@@ -1478,6 +1478,42 @@ EOF
 
 ## Day 3: 실시간 이상거래 탐지
 
+### 3-0. Day 3 브리핑 — 수행 시나리오와 오늘의 과제
+
+Day 3는 수행 시나리오에서 CTO가 요구한 두 번째 항목, 즉 "동일 사용자가 1분 내 3건 이상 거래하거나, 단건 500만원 초과 거래를 실시간으로 잡아야 한다"는 요구를 해결하기 위한 구현 단계다. Day 2에서 우리는 이벤트 타임과 윈도우를 통해 거래 흐름을 시간 기준으로 정확하게 해석하는 기반을 만들었다. Day 3에서는 그 기반 위에서 사용자별 거래 상태를 계속 추적하고, 정의한 규칙에 따라 이상 패턴을 즉시 탐지해 알림으로 전환한다.
+
+오늘 해결할 문제는 단순 집계가 아니다. 목표는 "이상 징후를 실시간으로 감지하고, 운영팀·대시보드·후속 시스템이 바로 활용할 수 있는 형태로 전달하는 것"이다. 이를 위해 Kafka의 `nexuspay.events.ingested`를 읽어 사용자별 상태를 유지하고, 탐지 결과를 `nexuspay.alerts.fraud` 토픽과 Redis 캐시에 전달하는 end-to-end 흐름을 완성한다.
+
+Day 3에서 학습자가 수행할 핵심 과제는 아래와 같다.
+
+1. 이상거래 탐지 결과를 표현할 `FraudAlert` 모델을 정의한다.
+2. `KeyedProcessFunction`과 상태(State)를 이용해 사용자별 실시간 탐지 규칙을 구현한다.
+3. `FraudDetectionJob`으로 Kafka 입력 → 탐지 → Kafka 알림 출력 흐름을 구성한다.
+4. Redis 캐싱 스크립트를 연결해 최근 이상거래 알림을 운영 관점에서 조회 가능하게 만든다.
+5. 이상거래 패턴 이벤트를 주입해 규칙이 기대대로 동작하는지 검증한다.
+
+Day 3 시작 전 실행 체크리스트:
+
+1. Day 2 산출물이 정상 동작 중인지 확인한다.
+2. `nexuspay.events.ingested` 토픽으로 이벤트가 유입되는 환경이 살아 있는지 확인한다.
+3. Flink JobManager / TaskManager, Kafka 3개 브로커, Redis 컨테이너가 모두 기동 중인지 확인한다.
+4. 오늘 구현 대상 파일이 `FraudAlert.java`, `FraudDetectionFunction.java`, `FraudDetectionJob.java`, `fraud_alert_redis_sink.py`라는 점을 먼저 인지한다.
+5. 오늘 검증 목표가 `RULE-001`, `RULE-002`, `RULE-003` 세 규칙 탐지와 Kafka·Redis 전달 확인이라는 점을 명확히 한다.
+
+Day 3 과제 요약:
+
+1. `FraudAlert.java`를 작성하고 `rule_id`, `user_id`, `severity`, `trigger_amount`, `event_count`, `detected_at` 필드와 `toJson()` 메서드가 있는지 확인한다.
+2. `FraudDetectionFunction.java`를 작성하고 `keyBy(userId)` 기준 상태 기반 탐지, `RULE-001`, `RULE-002`, `RULE-003`, 최근 1분 이벤트 상태와 정리 타이머가 모두 구현됐는지 확인한다.
+3. `FraudDetectionJob.java`를 작성하고 입력 토픽이 `nexuspay.events.ingested`, 출력 토픽이 `nexuspay.alerts.fraud`, `alerts.print("FRAUD-ALERT")`, `env.execute(...)`가 모두 포함됐는지 확인한다.
+4. `nexuspay.alerts.fraud` 토픽을 생성하고 파티션 3, replication factor 3, `min.insync.replicas=2` 설정을 확인한다.
+5. `mvn clean package -DskipTests`로 JAR를 빌드하고 `target/flink-jobs-1.0.0.jar`를 `data/flink/usrlib/`로 복사한다.
+6. `FraudDetectionJob`을 제출하고 `curl http://localhost:8081/jobs` 또는 `flink list`로 `RUNNING` 상태를 확인한다.
+7. `python3 scripts/flink/flink_event_generator.py --mode fraud --count 50`으로 이상거래 이벤트를 주입하고, 고액 거래·빈도 초과·1분 합계 초과 패턴이 실제로 들어가도록 확인한다.
+8. `nexuspay.alerts.fraud` 토픽에서 메시지를 확인하고 `RULE-001`, `RULE-002`, `RULE-003`가 모두 생성되는지 검증한다.
+9. `docker logs lab-flink-tm --tail 30 | grep "FRAUD-ALERT"`로 Flink 출력에도 탐지 결과가 보이는지 확인한다.
+10. `fraud_alert_redis_sink.py`를 실행하고 Redis에 최신 알림, 사용자별 카운터, 최근 100건 알림이 저장되는지 확인한다.
+11. 최종적으로 `FraudDetectionJob` 정상 실행, 3개 규칙 탐지, Kafka 알림 전달, Redis 캐싱 확인을 모두 충족하면 Day 3 완료로 판단한다.
+
 ### 3-1. 이상거래 알림 모델 정의
 
 ```java
@@ -1575,12 +1611,12 @@ package com.nexuspay.flink.function;
 
 import com.nexuspay.flink.model.FraudAlert;
 import com.nexuspay.flink.model.NexusPayEvent;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
@@ -1616,7 +1652,7 @@ public class FraudDetectionFunction
     private transient ValueState<Long> cleanupTimerState;
 
     @Override
-    public void open(Configuration parameters) {
+    public void open(OpenContext openContext) throws Exception {
         recentEventsState = getRuntimeContext().getListState(
                 new ListStateDescriptor<>("recent-events", TypeInformation.of(NexusPayEvent.class)));
         cleanupTimerState = getRuntimeContext().getState(
