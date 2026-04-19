@@ -39,3 +39,31 @@ Flink의 체크포인트는 분산 스냅샷이다.
 4. 장애 발생 시 마지막 성공 체크포인트에서 복구
 5. Kafka 소스 오프셋도 체크포인트에 포함 → 중복/유실 방지
 
+
+## 윈도우 유형 비교 — Nexus Pay 실습 기준
+
+| 윈도우 | 구현 | 용도 | 특성 |
+|--------|------|------|------|
+| Tumbling 5min | `TumblingEventTimeWindows.of(Duration.ofMinutes(5))` | 5분 단위 거래 통계 대시보드 | 겹침 없음, 정확한 구간 집계 |
+| Sliding 5min/1min | `SlidingEventTimeWindows.of(Duration.ofMinutes(5), Duration.ofMinutes(1))` | 1분마다 갱신되는 이동 평균 | 겹침 있음, 부드러운 추세 |
+| Session 2min gap | `EventTimeSessionWindows.withGap(Duration.ofMinutes(2))` | 사용자 활동 세션 분석 | 동적 크기, 행동 기반 |
+
+### Watermark 전략 정리
+
+| 파라미터 | 값 | 근거 |
+|----------|-----|------|
+| BoundedOutOfOrderness | 5초 | API 수집 주기(30초) 대비 충분한 여유 |
+| allowedLateness | 10초 | Watermark 이후 추가 10초까지 윈도우 재계산 허용 |
+| withIdleness | 1분 | 특정 파티션 데이터 없을 때 Watermark 진행 차단 방지 |
+| Side Output | LATE_DATA_TAG | 15초(5+10) 이후 도착 → DLQ로 분리 |
+
+### Late Data 처리 전략
+
+```
+이벤트 도착 시점에 따른 처리:
+  
+  [윈도우 종료 전]     → 정상 집계에 포함
+  [종료 ~ +10초]       → allowedLateness — 윈도우 재계산 (업데이트 결과 emit)
+  [+10초 초과]         → Side Output (LATE_DATA_TAG) → DLQ 토픽으로 전송
+```
+
