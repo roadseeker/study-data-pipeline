@@ -98,20 +98,35 @@ def generate_fraud(producer, count=50):
   print(f"[FRAUD] {count}건 전송 완료")
 
 def generate_late(producer, count=50):
-  """지연 데이터 포함 이벤트 생성 — Watermark 테스트용."""
-  print(f"[LATE] 지연 데이터 포함 {count}건 생성 시작")
-  for i in range(count):
-    if i % 8 == 0:
-      # 10~30초 전 타임스탬프를 가진 지연 이벤트
-      delay_seconds = random.randint(10, 30)
-      late_time = datetime.now(timezone.utc) - timedelta(seconds=delay_seconds)
-      event = create_event(timestamp=late_time)
-      print(f"  [LATE] {delay_seconds}초 지연 이벤트: {event['event_timestamp']}")
-    else:
-      event = create_event()
+  """Side output 검증용 truly late 이벤트 생성."""
+  print(f"[LATE] side output 검증용 {count}건 생성 시작")
+
+  warmup_count = max(10, count // 2)
+  late_count = max(1, count - warmup_count)
+  anchor_time = datetime.now(timezone.utc)
+
+  print(f"  [LATE] 1단계: 최근 이벤트 {warmup_count}건으로 워터마크 전진")
+  for i in range(warmup_count):
+    event_time = anchor_time + timedelta(seconds=i)
+    event = create_event(timestamp=event_time)
     producer.produce(TOPIC, key=str(event["user_id"]), value=json.dumps(event))
     producer.poll(0)
-    time.sleep(0.3)
+    time.sleep(0.2)
+
+  producer.flush()
+
+  print(f"  [LATE] 2단계: 6분 이상 과거 이벤트 {late_count}건 전송")
+  for i in range(late_count):
+    late_offset_seconds = random.randint(370, 430)
+    late_time = anchor_time - timedelta(seconds=late_offset_seconds)
+    event = create_event(timestamp=late_time)
+    print(
+      f"  [LATE] truly late 이벤트 {i + 1}/{late_count}: "
+      f"{late_offset_seconds}초 과거 -> {event['event_timestamp']}"
+    )
+    producer.produce(TOPIC, key=str(event["user_id"]), value=json.dumps(event))
+    producer.poll(0)
+    time.sleep(0.2)
 
   producer.flush()
   print(f"[LATE] {count}건 전송 완료")

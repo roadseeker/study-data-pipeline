@@ -1,14 +1,20 @@
 package com.nexuspay.flink.job;
 
 
+import com.nexuspay.flink.function.LateDataSideOutputFunction;
+import com.nexuspay.flink.function.TransactionAggregateFunction;
+import com.nexuspay.flink.function.TransactionWindowFunction;
+import com.nexuspay.flink.model.AggregatedResult;
+import com.nexuspay.flink.model.NexusPayEvent;
 import com.nexuspay.flink.util.NexusPayEventDeserializer;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-
-import com.nexuspay.flink.model.NexusPayEvent;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -21,16 +27,21 @@ import java.util.Objects;
  * → Watermark 할당
  * → 거래 이벤트 필터링 (PAYMENT, TRANSFER, WITHDRAWAL)
  * → 윈도우 집계 (5분 Tumbling)
+ * → keyBy(eventType)
+ * ├── [Tumbling 5분] 거래 유형별 5분 단위 집계
+ * ├── [Sliding 5분/1분] 1분마다 갱신되는 5분 이동 평균
+ * └── [Late Data] Side Output → DLQ
  * → 결과 싱크 (Kafka + Redis)
  */
 public class TransactionAggregationJob {
 
     public static void main(String[] args) throws Exception {
         // 1. 실행 환경 구성
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment
+                .getExecutionEnvironment();
         // 체크포인트 활성화 (Exactly-once 기반 - Day 4에서 상세 설정
         env.enableCheckpointing(60_000); // 60초 주기
+        env.getConfig().setAutoWatermarkInterval(1000L); //watermark 1초 주기 갱신
 
         // 2. Kafka 소스 구성
         KafkaSource<NexusPayEvent> kafkaSource = KafkaSource.<NexusPayEvent>builder()
@@ -65,15 +76,42 @@ public class TransactionAggregationJob {
                 })
                 .name("Filter Transaction Events");
 
-        // Day 2에서 윈도우 집계 추가
-        // Day 3에서 이상거래 탐지 분기 추가
-        // Day 4에서 Exactly-once 싱크 추가
+        // 6. Tumbling window aggregation - 5분단위 집계
+        SingleOutputStreamOperator<AggregatedResult> tumblingResult = transactionDataStream
+                .keyBy(NexusPayEvent::getEventType)
+                .window(TumblingEventTimeWindows.of(Duration.ofMinutes(5)))
+                .allowedLateness(Duration.ofSeconds(10)) //10초 추가 지연 허용
+                .sideOutputLateData(LateDataSideOutputFunction.LATE_DATA_TAG) // 그 이후 Side Output
+                .aggregate(
+                        new TransactionAggregateFunction(),
+                        new TransactionWindowFunction()
+                )
+                .name("5min Tumbling Window Aggregation");
+        // 집계 결과 출력 (Day 4에서 Kafka 싱크로 교체)
+        tumblingResult.print("TUMBLING-5MIN");
 
-        // 6. 디버깅용 콘솔 출력(Day 1 검증용)
-        transactionDataStream.print("TX-EVENT");
+        // 7. Sliding Window — 5분 윈도우, 1분 슬라이드 (이동 평균)
+        SingleOutputStreamOperator<AggregatedResult> slidingResult = transactionDataStream
+                .keyBy(NexusPayEvent::getEventType)
+                .window(SlidingEventTimeWindows.of(Duration.ofMinutes(5), Duration.ofMinutes(1)))
+                .allowedLateness(Duration.ofSeconds(10))
+                .sideOutputLateData(LateDataSideOutputFunction.SLIDING_LATE_DATA_TAG)
+                .aggregate(
+                        new TransactionAggregateFunction(),
+                        new TransactionWindowFunction()
+                )
+                .name("5min Sliding Window Aggregation");
 
-        // 7. 잡 실행
-        env.execute("Nexus Pay Transaction Aggregation Job v1.0");
+        slidingResult.print("SLIDING-5MIN-1MIN");
+
+        // 8. Late Data 처리
+        DataStream<NexusPayEvent> lateData = tumblingResult
+                .getSideOutput(LateDataSideOutputFunction.LATE_DATA_TAG);
+        // Day 4에서 DLQ Kafka 싱크로 교체
+        lateData.print("LATE-DATA");
+
+        // 9. 잡 실행
+        env.execute("Nexus Pay Transaction Aggregation Job v2.0");
 
     }
 }
