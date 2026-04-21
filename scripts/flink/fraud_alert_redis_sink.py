@@ -51,7 +51,7 @@ def main():
 
         # 3. 최근 100건 알림 저장 (score=timestamp)
         score = time.time()
-        r.zadd("fraud:alerts:recent", {json.dumps(alert): score})
+        r.zadd("fraud:alerts:recent", {json.dumps(alert, ensure_ascii=False): score})
         r.zremrangebyrank("fraud:alerts:recent", 0, -101)  # 100건 초과 시 오래된 알림 제거
 
         print(f" [{alert['rule_id']}] user={user_id}, alert_id={alert['alert_id']} -> Redis 캐싱 완료")
