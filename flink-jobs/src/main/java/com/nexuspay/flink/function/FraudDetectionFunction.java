@@ -86,15 +86,16 @@ public class FraudDetectionFunction
                                Collector<FraudAlert> out) throws Exception {
 
         long currentTime = event.getEventTimeMillis();
+        double currentAmount = safeAmount(event.getAmount());
         // ── RULE-002: 단건 고액 거래 즉시 판정 ──
-        if (event.getAmount() >= HIGH_AMOUNT_THRESHOLD) {
+        if (currentAmount >= HIGH_AMOUNT_THRESHOLD) {
             out.collect(new FraudAlert(
                     "RULE-002",
                     "단건 500만원 초과 거래",
                     event.getUserId(),
                     "HIGH",
                     event.getEventId(),
-                    event.getAmount(),
+                    currentAmount,
                     1
             ));
         }
@@ -104,31 +105,32 @@ public class FraudDetectionFunction
 
         // ── 만료 이벤트 정리 (1분 경과) ──
         List<NexusPayEvent> activeEvents = new ArrayList<>();
+        int activeCount = 0;
+        double totalAmount = 0.0;
         for (NexusPayEvent e : recentEventsState.get()) {
             if (currentTime - e.getEventTimeMillis() <= WINDOW_DURATION_MS) {
                 activeEvents.add(e);
+                activeCount++;
+                totalAmount += safeAmount(e.getAmount());
             }
         }
         recentEventsState.update(activeEvents);
 
         // ── RULE-001: 1분 내 연속 거래 빈도 검사 ──
-        if (activeEvents.size() >= FREQUENCY_THRESHOLD) {
+        if (activeCount >= FREQUENCY_THRESHOLD) {
             out.collect(new FraudAlert(
                     "RULE-001",
-                    "1분 내 " + activeEvents.size() + "건 연속 거래",
+                    "1분 내 " + activeCount + "건 연속 거래",
                     event.getUserId(),
                     "HIGH",
                     event.getEventId(),
-                    event.getAmount() != null ? event.getAmount() : 0,
-                    activeEvents.size()
+                    currentAmount,
+                    activeCount
             ));
         }
 
         // ── RULE-003: 1분 내 거래 합계 검사 ──
-        double totalAmount = activeEvents.stream()
-                .mapToDouble(e -> e.getAmount() !=null ? e.getAmount() : 0)
-                .sum();
-        if(totalAmount > SUM_AMOUNT_THRESHOLD) {
+        if (totalAmount > SUM_AMOUNT_THRESHOLD) {
             out.collect(new FraudAlert(
                     "RULE-003",
                     "1분 내 거래 합계 " + String.format("%.0f", totalAmount) + "원 초과",
@@ -136,7 +138,7 @@ public class FraudDetectionFunction
                     "MEDIUM",
                     event.getEventId(),
                     totalAmount,
-                    activeEvents.size()
+                    activeCount
             ));
         }
 
@@ -178,5 +180,12 @@ public class FraudDetectionFunction
             }
         }
         recentEventsState.update(activeEvents);
+        if (activeEvents.isEmpty()) {
+            cleanupTimerState.clear();
+        }
+    }
+
+    private static double safeAmount(Double amount) {
+        return amount != null ? amount : 0.0;
     }
 }
