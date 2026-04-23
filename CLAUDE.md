@@ -13,14 +13,14 @@ The business target: mid-sized Korean companies in finance, fintech, and manufac
 
 **Phase 1 — Capability Completion (Months 1–4, full-time)**
 
-Domain A pipeline practice is structured as an 8-week program using a fictional fintech company "Nexus Pay" as the scenario. The current branch `week1-pipeline-foundation` corresponds to **Week 1: environment setup**.
+Domain A pipeline practice is structured as an 8-week program using a fictional fintech company "Nexus Pay" as the scenario. The current branch `week4-flink` corresponds to **Week 4: Flink real-time stream processing**.
 
 | Week | Topic | Status |
 |------|-------|--------|
-| Week 1 | Full-stack Docker Compose setup (Kafka, NiFi, Flink, Spark, Airflow, Redis, PostgreSQL) | In progress |
-| Week 2 | Kafka deep dive (topic design, partitions, consumer groups, replication) | Pending |
-| Week 3 | NiFi multi-source ingestion + Provenance tracking | Pending |
-| Week 4 | Flink real-time stream processing + exactly-once | Pending |
+| Week 1 | Full-stack Docker Compose setup (Kafka, NiFi, Flink, Spark, Airflow, Redis, PostgreSQL) | Completed |
+| Week 2 | Kafka deep dive (topic design, partitions, consumer groups, replication) | Completed |
+| Week 3 | NiFi multi-source ingestion + Provenance tracking | Completed |
+| Week 4 | Flink real-time stream processing + exactly-once | In progress |
 | Week 5 | Spark batch ETL + Medallion architecture (Bronze/Silver/Gold) + Delta Lake | Pending |
 | Week 6 | RDBMS migration: Spark JDBC + Debezium CDC | Pending |
 | Week 7 | Airflow orchestration (DAG dependencies, SLA, failure recovery) | Pending |
@@ -30,17 +30,17 @@ After Week 8, Domain B ML practice begins (Weeks 9–16: classification, regress
 
 ## Tech Stack
 
-### Data Pipeline
+### Data Pipeline (Current Repo Baseline)
 | Layer | Tools |
 |-------|-------|
-| Ingest | Apache Kafka 3.7 (KRaft mode), Apache NiFi 1.25, Kafka Connect |
-| Transform | Apache Flink 1.18, Apache Spark 3.5 (official `apache/spark` image), dbt Core |
-| Store | Delta Lake, Apache Iceberg, HDFS, Amazon S3, PostgreSQL 16 |
-| Orchestration | Apache Airflow 2.8 |
-| Migration | Spark JDBC, Debezium (CDC) |
+| Ingest | Apache Kafka 3.7 (KRaft mode, 3 brokers), Apache NiFi 2.9.0 |
+| Transform | Apache Flink 2.2.0, Apache Spark 3.5.1 |
+| Store | PostgreSQL 16, Redis 7, local sample data, Delta output workspace |
+| Orchestration | Apache Airflow 2.8.4 |
+| Migration (planned Week 6) | Spark JDBC, Debezium (CDC) |
 | Feature store | Redis 7, PostgreSQL |
 
-### AI/ML
+### AI/ML (Planned Domain B Scope)
 | Layer | Tools |
 |-------|-------|
 | ML frameworks | scikit-learn, XGBoost, LightGBM |
@@ -61,51 +61,39 @@ After Week 8, Domain B ML practice begins (Weeks 9–16: classification, regress
 ## Project Structure
 
 ```
-pipeline-lab/
-├── docker-compose.yml          # Full stack definition (grows each week)
+study-data-pipeline/
+├── docker-compose.yml          # Full stack definition (evolves by week)
 ├── .env                        # Env vars — not committed
-├── Dockerfile.airflow          # Custom Airflow image (added Week 7)
+├── AGENTS.md                   # Repository-wide agent instructions
+├── CLAUDE.md                   # Repository guidance for Claude-style agents
 ├── config/
-│   ├── kafka/                  # Topic naming conventions, config docs
-│   ├── nifi/                   # Processor group designs, JOLT specs, Avro schemas
-│   ├── flink/                  # Placeholder
-│   ├── spark/                  # Placeholder
-│   ├── airflow/                # Placeholder
-│   ├── debezium-mysql-connector.json  # CDC connector (Week 6)
-│   └── e2e/                    # Business-day scenario YAML (Week 8)
+│   ├── airflow/                # Airflow config placeholder
+│   ├── flink/                  # Flink config placeholder
+│   ├── kafka/                  # Topic naming conventions and Kafka docs
+│   ├── nifi/                   # NiFi TLS, JOLT specs, schema, process design
+│   └── spark/                  # Spark config placeholder
 ├── dags/                       # Airflow DAG files
-├── plugins/                    # Airflow alerting plugin (Slack/email)
 ├── docs/
+│   ├── airflow/                # Airflow docs
+│   ├── flink/                  # Flink docs
 │   ├── guides/                 # 01~08 weekly lab guides
-│   ├── foundation/             # Week 1 docs and shared platform docs
 │   ├── kafka/                  # Kafka architecture and operations docs
 │   ├── nifi/                   # NiFi concept and ingestion docs
-│   ├── flink/                  # Flink docs
-│   ├── spark/                  # Spark and migration docs
-│   ├── airflow/                # Airflow docs
-│   └── reports/                # Consulting reports and cross-week reports
+│   ├── reports/                # Consulting reports and cross-week reports
+│   └── spark/                  # Spark and migration docs
 ├── scripts/
 │   ├── foundation/             # Health checks and base DB init scripts
 │   ├── kafka/                  # Kafka producers, consumers, verification
 │   ├── nifi/                   # NiFi simulators and ingestion helpers
-│   └── e2e/                    # End-to-end rehearsal scripts (Week 8)
-├── spark-etl/                  # Week 5 Medallion ETL (Bronze→Silver→Gold)
-│   ├── config/                 # etl_config.yaml, quality_rules.yaml
-│   ├── lib/                    # SparkSession factory, schema registry, quality checker
-│   └── jobs/                   # bronze_ingestion.py, silver_transformation.py, gold_aggregation.py
-├── spark-jobs/
-│   ├── migration/              # Week 6: jdbc_full_export.py, cdc_to_delta.py
-│   └── orchestration/         # Week 7: master_refresh.py
+│   └── verify_nifi_pipeline.sh # Legacy verification helper at repo root
 ├── flink-jobs/                 # Week 4 Java-based stream processing
-│   └── src/main/java/com/nexuspay/flink/
-│       ├── job/                # TransactionAggregationJob, FraudDetectionJob
-│       ├── function/           # Aggregation, window, fraud detection functions
-│       ├── model/              # NexusPayEvent, AggregatedResult, FraudAlert POJOs
-│       └── util/               # Deserializer, config util, exactly-once sink builder
+├── spark-etl/                  # Week 5 Medallion ETL workspace
+├── spark-jobs/                 # Week 6~7 migration and orchestration jobs
 └── data/
-    ├── sample/
-    ├── settlement/             # NiFi-collected CSV files
-    └── delta/                  # Delta Lake storage (Bronze/Silver/Gold + migration)
+    ├── delta/                  # Delta output workspace
+    ├── nifi/settlement/        # NiFi settlement file landing/processed area
+    ├── sample/                 # Shared sample inputs
+    └── settlement/             # Legacy settlement sample/output area
 ```
 
 ## Service Ports (Docker)
@@ -114,13 +102,13 @@ pipeline-lab/
 |---------|-----------|------|
 | PostgreSQL | lab-postgres | 5432 |
 | Redis | lab-redis | 6379 |
-| Kafka (KRaft) | lab-kafka | 29092 |
-| NiFi | lab-nifi | 8080 (http://localhost:8080/nifi, admin/nifi) |
+| Kafka broker 1 | lab-kafka-1 | 30092 |
+| Kafka broker 2 | lab-kafka-2 | 30093 |
+| Kafka broker 3 | lab-kafka-3 | 30094 |
+| NiFi | lab-nifi | 8443 (`https://localhost:8443/nifi/`) |
 | Flink JobManager | lab-flink-jm | 8081 |
 | Spark Master | lab-spark-master | 8082, 7077 |
-| Airflow | lab-airflow-web | 8083 (admin/airflow) |
-| MySQL (legacy, Week 6) | lab-mysql | 3306 |
-| Kafka Connect (Week 6) | lab-kafka-connect | 8084 |
+| Airflow Webserver | lab-airflow-web | 8083 |
 | Payment API (Week 3) | lab-payment-api | 5050 |
 
 ## Key Conventions
@@ -129,7 +117,7 @@ pipeline-lab/
 All pipeline practice is framed around a fictional fintech company "Nexus Pay" data modernization PoC. Each week has a specific stakeholder scenario (CTO, CFO, COO, CIO) that drives the requirements. Deliverables should be proposal-quality.
 
 ### Git Branch Convention
-Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
+Branches are named `week{N}-{topic}` (e.g., `week4-flink`).
 
 ### Deliverable Standards
 - Each week produces production-quality artifacts: code, shell verification scripts, and architecture/operations documentation
@@ -137,6 +125,8 @@ Branches are named `week{N}-{topic}` (e.g., `week1-pipeline-foundation`).
 - Weekly lab guides live in `docs/guides/`
 - Deliverable documents and scripts live in domain folders such as `docs/kafka/`, `docs/nifi/`, `scripts/kafka/`, and `scripts/nifi/`
 - New artifacts should be filed by domain responsibility, not by week number
+- Before creating or modifying documents, guides, instruction files, or repository-structure-related assets, first present the proposed change, the reason for it, and the target path(s), then explicitly ask whether the user wants the file created or modified.
+- Apply the same confirmation-first approach to path corrections, file moves, and stakeholder-facing deliverables so the user can approve direction before edits are made.
 
 ### Commit Message Convention
 - When writing or suggesting a git commit command, use a single `-m` option with a multi-line message.

@@ -6,7 +6,7 @@ API_URL="${API_URL:-http://localhost:5050/health}"
 MEASURE_SECONDS="${MEASURE_SECONDS:-300}"
 
 read_seq() {
-	curl -s "${API_URL}" | python -c "import sys, json; print(json.load(sys.stdin)['seq'])"
+	curl -s "${API_URL}" | python3 -c "import sys, json; print(json.load(sys.stdin)['seq'])"
 }
 
 echo "============================================"
@@ -28,8 +28,8 @@ END_TS="$(date '+%Y-%m-%d %H:%M:%S')"
 TOTAL=$((END_COUNT - START_COUNT))
 
 if [ "${MEASURE_SECONDS}" -gt 0 ]; then
-	PER_MIN=$(python -c "print(round(${TOTAL} / (${MEASURE_SECONDS} / 60), 2))")
-	PER_SEC=$(python -c "print(round(${TOTAL} / ${MEASURE_SECONDS}, 2))")
+	PER_MIN=$(python3 -c "print(round(${TOTAL} / (${MEASURE_SECONDS} / 60), 2))")
+	PER_SEC=$(python3 -c "print(round(${TOTAL} / ${MEASURE_SECONDS}, 2))")
 else
 	PER_MIN="0"
 	PER_SEC="0"

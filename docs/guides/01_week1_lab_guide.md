@@ -520,9 +520,13 @@ docker compose up -d nifi
 ```yaml
   # ──────────────────────────────────────
   # Flink — 실시간 스트림 처리
+  # [Week 1 기준선 기록] 당시 이미지: flink:1.20.3-scala_2.12-java11 (Java 11)
+  # [업그레이드 노트] 2026-04-17: week4-flink 브랜치부터 flink:2.2.0-java17 적용.
+  #   Scala API 제거로 scala_2.12 접미사 삭제, Java 17 전환, config.yaml 포맷 사용.
+  #   실제 docker-compose.yml은 이미 2.2.0 기준으로 갱신됨.
   # ──────────────────────────────────────
   flink-jobmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-jm
     command: jobmanager
     environment:
@@ -541,7 +545,7 @@ docker compose up -d nifi
       retries: 10
 
   flink-taskmanager:
-    image: flink:1.18.1-scala_2.12-java11
+    image: flink:1.20.3-scala_2.12-java11
     container_name: lab-flink-tm
     command: taskmanager
     environment:
@@ -713,17 +717,17 @@ with DAG(
 
     check_postgres = BashOperator(
         task_id="check_postgres",
-        bash_command='python -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline\'); print(\'PostgreSQL OK\')"',
+        bash_command='python3 -c "import psycopg2; c=psycopg2.connect(host=\'postgres\',dbname=\'pipeline_db\',user=\'pipeline\',password=\'pipeline\'); print(\'PostgreSQL OK\')"',
     )
 
     check_redis = BashOperator(
         task_id="check_redis",
-        bash_command='python -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis\'); print(r.ping())"',
+        bash_command='python3 -c "import redis; r=redis.Redis(host=\'redis\',password=\'redis\'); print(r.ping())"',
     )
 
     check_kafka = BashOperator(
         task_id="check_kafka",
-        bash_command='python -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
+        bash_command='python3 -c "from confluent_kafka.admin import AdminClient; a=AdminClient({\'bootstrap.servers\':\'kafka:9092\'}); print(\'Kafka brokers:\', len(a.list_topics(timeout=5).brokers))"',
     )
 
     check_flink = BashOperator(

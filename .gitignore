@@ -65,6 +65,7 @@ dags/airflow.cfg
 # --- Local temp ---
 tmp/
 temp/
+*.bak
 
 # --- Local NiFi TLS artifacts ---
 config/nifi/tls/*

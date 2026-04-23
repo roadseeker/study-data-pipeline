@@ -14,3 +14,4 @@ This folder contains Week 4 real-time stream-processing deliverables built with 
 - Preserve readable Java structure suitable for portfolio review.
 - Stream-processing correctness is more important than premature abstraction.
 - If changing schemas or event models, ensure consistency with Kafka, NiFi, and documentation assumptions.
+- Always explain code in Korean when the user asks for a code explanation.

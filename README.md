@@ -16,7 +16,7 @@
 | Redis 7 | lab-redis | 6379 | 피처 스토어·캐시 |
 | Kafka 3.7 (KRaft) | lab-kafka-1 / lab-kafka-2 / lab-kafka-3 | 30092, 30093, 30094 | 실시간 메시징 |
 | NiFi 1.25 | lab-nifi | 8080 | 데이터 수집·라우팅 |
-| Flink 1.18 | lab-flink-jm / lab-flink-tm | 8081 | 실시간 스트림 처리 |
+| Flink 2.2.0 | lab-flink-jm / lab-flink-tm | 8081 | 실시간 스트림 처리 |
 | Spark 3.5 (official Apache image) | lab-spark-master / lab-spark-worker | 8082, 7077 | 배치 처리 |
 | Airflow 2.8 | lab-airflow-web / lab-airflow-sched | 8083 | 워크플로우 오케스트레이션 |
 
@@ -104,5 +104,3 @@ docker compose down -v
 - 브랜드 명칭은 `Nexus Pay`로 통일하고, 기술 식별자는 `nexuspay` / `NexusPay` 규칙을 사용한다.
 - Git Bash 환경에서는 컨테이너 내부 절대경로 명령 실행 시 `docker exec ... sh -c '...'` 형태를 권장한다.
 - Week 가이드는 `docs/guides/`에, 실제 산출물 문서와 스크립트는 기술 도메인 폴더에 저장한다.
-
-

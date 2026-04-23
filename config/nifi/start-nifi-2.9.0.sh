@@ -35,4 +35,6 @@ if [ -n "${SINGLE_USER_CREDENTIALS_USERNAME:-}" ] && [ -n "${SINGLE_USER_CREDENT
     "${SINGLE_USER_CREDENTIALS_PASSWORD}"
 fi
 
+set_property "nifi.web.https.host" "0.0.0.0"
+
 exec /opt/nifi/scripts/start.sh

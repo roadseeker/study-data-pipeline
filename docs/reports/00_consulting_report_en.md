@@ -755,7 +755,7 @@ pipeline-lab/
 │       └── master_refresh.py                   (W7) Master table full refresh for Airflow integration
 │
 ├── flink-jobs/                                 -- Week 4 real-time stream processing --
-│   ├── pom.xml                                 (W4) Maven build settings (Flink 1.18.1, Kafka connector)
+│   ├── pom.xml                                 (W4) Maven build settings (Flink 2.2.0, Java 17, Kafka connector 4.0.1-2.0)
 │   └── src/main/java/com/nexuspay/flink/
 │       ├── job/
 │       │   ├── TransactionAggregationJob.java  (W4) Five-minute window transaction aggregation
@@ -928,5 +928,3 @@ The most direct action to take now is to complete the 16-week ML learning schedu
 *This report was prepared based on market data and technical capability analysis as of March 2026.*
 
 *Primary sources: Ministry of Science and ICT and KDATA, "2024 Data Industry Survey" / CIO Korea, "2026 IT Outlook Survey" / Deloitte, "2026 TMT Outlook" / National Information Society Agency, "2026 AI Outlook Analysis" / Fortune Business Insights, "AI Consulting Services Market Analysis"*
-
-

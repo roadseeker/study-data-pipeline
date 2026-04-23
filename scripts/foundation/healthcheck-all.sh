@@ -1,9 +1,11 @@
-#!/bin/bash33
+#!/bin/bash
 # =============================================================
 # scripts/foundation/healthcheck-all.sh
 # Pipeline Lab — 전체 환경 헬스체크 스크립트
-# Week 1: 데이터 파이프라인 실습 환경 구성
+# Foundation: 공통 인프라 기동 상태 점검
 # =============================================================
+
+set -u
 
 echo "============================================"
 echo " Pipeline Lab — 전체 환경 헬스체크"
@@ -37,6 +39,31 @@ check() {
 	fi
 }
 
+check_retry() {
+	local name=$1
+	local cmd=$2
+	local retries=${3:-5}
+	local delay=${4:-3}
+	local attempt=1
+
+	printf "  %-20s : " "$name"
+	while [ "$attempt" -le "$retries" ]; do
+		if eval "$cmd" >/dev/null 2>&1; then
+			echo "✅ OK"
+			((PASS++))
+			return 0
+		fi
+		if [ "$attempt" -lt "$retries" ]; then
+			sleep "$delay"
+		fi
+		attempt=$((attempt + 1))
+	done
+
+	echo "❌ FAIL"
+	((FAIL++))
+	return 1
+}
+
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
 check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
@@ -44,13 +71,15 @@ check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
 echo ""
 echo "[메시징·수집]"
 check "Kafka" "docker exec ${KAFKA_CONTAINER} sh -c '/opt/kafka/bin/kafka-topics.sh --bootstrap-server ${KAFKA_BOOTSTRAP} --list'"
-check "NiFi" "curl -sf http://localhost:8080/nifi/"
+check_retry "NiFi" "curl -skf https://localhost:8443/nifi/" 5 5
 
 echo ""
 echo "[처리·오케스트레이션]"
 check "Flink JobManager" "curl -sf http://localhost:8081/overview"
+check "Flink TaskManager" "curl -sf http://localhost:8081/overview | python3 -c \"import sys, json; data = json.load(sys.stdin); raise SystemExit(0 if data.get('taskmanagers', 0) >= 1 else 1)\""
 check "Spark Master" "curl -sf http://localhost:8082/"
-check "Airflow" "curl -sf http://localhost:8083/health"
+check "Spark Worker" "curl -sf http://localhost:8082/json/ | python3 -c \"import sys, json; data = json.load(sys.stdin); workers = data.get('workers', []); alive = [w for w in workers if w.get('state') == 'ALIVE']; raise SystemExit(0 if len(alive) >= 1 else 1)\""
+check_retry "Airflow" "curl -sf http://localhost:8083/health" 5 5
 
 echo ""
 echo "============================================"
@@ -61,4 +90,3 @@ echo "============================================"
 if [ "${FAIL}" -gt 0 ]; then
 	exit 1
 fi
-

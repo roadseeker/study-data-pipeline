@@ -50,7 +50,7 @@ docker exec lab-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
   --topic nexuspay.events.ingested \
   --from-beginning \
   --timeout-ms 10000 2>/dev/null | \
-python -c "
+python3 -c "
 import sys, json
 from collections import Counter
 sources = Counter()
