@@ -55,6 +55,7 @@ derby.log
 airflow.db
 airflow-webserver.pid
 webserver_config.py
+dags/airflow.cfg
 
 # --- Local data outputs (keep sample inputs) ---
 /data/*
