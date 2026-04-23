@@ -567,7 +567,7 @@ docker compose up -d nifi
   # Spark — 배치 처리
   # ──────────────────────────────────────
   spark-master:
-    image: apache/spark:3.5.1
+    image: apache/spark:3.5.8
     container_name: lab-spark-master
     command:
       - /opt/spark/bin/spark-class
@@ -594,7 +594,7 @@ docker compose up -d nifi
       retries: 10
 
   spark-worker:
-    image: apache/spark:3.5.1
+    image: apache/spark:3.5.8
     container_name: lab-spark-worker
     command:
       - /opt/spark/bin/spark-class
@@ -617,7 +617,7 @@ docker compose up -d nifi
       - pipeline-net
 ```
 
-> 참고: Spark는 `bitnami/spark` 대신 공식 이미지 `apache/spark:3.5.1` 기준으로 구성하며, `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
+> 참고: Spark는 `bitnami/spark` 대신 공식 이미지 `apache/spark:3.5.8` 기준으로 구성하며, `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
 
 ### 3-3. Airflow 서비스 추가
 

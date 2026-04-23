@@ -113,7 +113,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless curl wget procps && \
     rm -rf /var/lib/apt/lists/*
 
-ENV SPARK_VERSION=3.5.1
+ENV SPARK_VERSION=3.5.8
 RUN wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz && \
     tar -xzf spark-${SPARK_VERSION}-bin-hadoop3.tgz -C /opt && \
     ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop3 /opt/spark && \

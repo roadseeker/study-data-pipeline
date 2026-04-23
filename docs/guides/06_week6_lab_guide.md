@@ -1093,7 +1093,7 @@ def create_spark():
         .appName("nexuspay-CDC-to-Delta") \
         .config("spark.jars.packages",
                 "io.delta:delta-spark_2.12:3.1.0,"
-                "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1") \
+                "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.8") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
@@ -1210,7 +1210,7 @@ PYEOF
 # 터미널 1: CDC → Delta Lake 스트리밍 시작
 docker exec lab-spark-master spark-submit \
   --master spark://spark-master:7077 \
-  --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
+  --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.8 \
   /opt/spark-jobs/migration/cdc_to_delta.py
 
 # 터미널 2: MySQL에서 변경 발생 → Delta Lake 반영 확인
@@ -1539,4 +1539,3 @@ git commit -m "Week 6: 이관 파이프라인 — Spark JDBC 배치 + Debezium C
 ## Week 7 예고
 
 Week 7에서는 Apache Airflow를 활용한 오케스트레이션 심화 실습을 진행한다. Week 1~6에서 구축한 모든 파이프라인(배치 이관, CDC 모니터링, Spark ETL, 정합성 검증)을 Airflow DAG으로 스케줄링하고, SLA 모니터링·장애 복구·알림 설정을 통해 운영 수준의 파이프라인 오케스트레이션을 완성한다. Day 2에서 만든 배치 이관이 매일 자동으로 실행되고, Day 3의 정합성 검증이 이관 후 자동으로 수행되며, Day 4의 CDC 커넥터 상태가 주기적으로 점검되는 통합 워크플로우를 구현한다.
-

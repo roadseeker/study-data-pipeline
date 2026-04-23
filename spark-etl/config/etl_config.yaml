@@ -1,0 +1,46 @@
+# Nexus Pay Spark ETL 설정
+spark:
+  app_name: "nexuspay-Batch-ETL"
+  master: "local[*]"
+  config:
+    spark.sql.extensions: "io.delta.sql.DeltaSparkSessionExtension"
+    spark.sql.catalog.spark_catalog: "org.apache.spark.sql.delta.catalog.DeltaCatalog"
+    spark.sql.shuffle.partitions: 8
+    spark.default.parallelism: 8
+    spark.sql.adaptive.enabled: true
+    spark.sql.adaptive.coalescePartitions.enabled: true
+
+kafka:
+  bootstrap_servers: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+  source_topic: "nexuspay.events.ingested"
+  consumer_group: "spark-batch-etl"
+
+paths:
+  bronze: "/data/lakehouse/delta/bronze/transactions"
+  silver: "/data/lakehouse/delta/silver/transactions"
+  gold:
+    daily_summary: "/data/lakehouse/delta/gold/daily_summary"
+    customer_stats: "/data/lakehouse/delta/gold/customer_stats"
+    fee_settlement: "/data/lakehouse/delta/gold/fee_settlement"
+  quality_reports: "/data/lakehouse/delta/quality-reports"
+  checkpoints: "/data/lakehouse/delta/checkpoints"
+
+partitioning:
+  bronze:
+    columns: ["ingest_date"]
+  silver:
+    columns: ["tx_date", "tx_type"]
+  gold:
+    daily_summary: ["summary_date"]
+    customer_stats: ["stats_month"]
+
+quality:
+  null_threshold: 0.01          # 1% 이상 null이면 경고
+  duplicate_threshold: 0.001    # 0.1% 이상 중복이면 경고
+  max_amount: 50000000          # 5천만원 초과 거래 이상값 플래그
+  min_amount: 100               # 100원 미만 거래 이상값 플래그
+
+batch:
+  processing_date: "yesterday"  # 기본: 전일 데이터 처리
+  retry_count: 3
+  retry_delay_seconds: 60

@@ -59,8 +59,33 @@ dags/airflow.cfg
 
 # --- Local data outputs (keep sample inputs) ---
 /data/*
+!/data/README.md
 !/data/sample/
 !/data/sample/**
+!/data/settlement/
+/data/settlement/*
+!/data/settlement/README.md
+!/data/lakehouse/
+/data/lakehouse/*
+!/data/lakehouse/README.md
+!/data/lakehouse/delta/
+/data/lakehouse/delta/*
+!/data/lakehouse/delta/README.md
+!/data/lakehouse/delta/bronze/
+/data/lakehouse/delta/bronze/*
+!/data/lakehouse/delta/bronze/README.md
+!/data/lakehouse/delta/silver/
+/data/lakehouse/delta/silver/*
+!/data/lakehouse/delta/silver/README.md
+!/data/lakehouse/delta/gold/
+/data/lakehouse/delta/gold/*
+!/data/lakehouse/delta/gold/README.md
+!/data/lakehouse/delta/checkpoints/
+/data/lakehouse/delta/checkpoints/*
+!/data/lakehouse/delta/checkpoints/README.md
+!/data/lakehouse/delta/quality-reports/
+/data/lakehouse/delta/quality-reports/*
+!/data/lakehouse/delta/quality-reports/README.md
 
 # --- Local temp ---
 tmp/

@@ -15,6 +15,7 @@ echo ""
 
 PASS=0
 FAIL=0
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 # Kafka 컨테이너명 자동 감지 (단일 브로커 vs 멀티 브로커)
 if docker ps --format '{{.Names}}' | grep -q '^lab-kafka-1$'; then
@@ -64,6 +65,28 @@ check_retry() {
 	return 1
 }
 
+check_flink_taskmanager() {
+	printf "  %-20s : " "Flink TaskManager"
+	if curl -sf http://localhost:8081/overview | "$PYTHON_BIN" -c 'import sys, json; data = json.load(sys.stdin); raise SystemExit(0 if data.get("taskmanagers", 0) >= 1 else 1)' >/dev/null 2>&1; then
+		echo "✅ OK"
+		((PASS++))
+	else
+		echo "❌ FAIL"
+		((FAIL++))
+	fi
+}
+
+check_spark_worker() {
+	printf "  %-20s : " "Spark Worker"
+	if curl -sf http://localhost:8082/json/ | "$PYTHON_BIN" -c 'import sys, json; data = json.load(sys.stdin); workers = data.get("workers", []); alive = [w for w in workers if w.get("state") == "ALIVE"]; raise SystemExit(0 if len(alive) >= 1 else 1)' >/dev/null 2>&1; then
+		echo "✅ OK"
+		((PASS++))
+	else
+		echo "❌ FAIL"
+		((FAIL++))
+	fi
+}
+
 echo "[기반 서비스]"
 check "PostgreSQL" "docker exec lab-postgres pg_isready -U pipeline"
 check "Redis" "docker exec -e REDISCLI_AUTH=redis lab-redis redis-cli ping"
@@ -76,9 +99,9 @@ check_retry "NiFi" "curl -skf https://localhost:8443/nifi/" 5 5
 echo ""
 echo "[처리·오케스트레이션]"
 check "Flink JobManager" "curl -sf http://localhost:8081/overview"
-check "Flink TaskManager" "curl -sf http://localhost:8081/overview | python3 -c \"import sys, json; data = json.load(sys.stdin); raise SystemExit(0 if data.get('taskmanagers', 0) >= 1 else 1)\""
+check_flink_taskmanager
 check "Spark Master" "curl -sf http://localhost:8082/"
-check "Spark Worker" "curl -sf http://localhost:8082/json/ | python3 -c \"import sys, json; data = json.load(sys.stdin); workers = data.get('workers', []); alive = [w for w in workers if w.get('state') == 'ALIVE']; raise SystemExit(0 if len(alive) >= 1 else 1)\""
+check_spark_worker
 check_retry "Airflow" "curl -sf http://localhost:8083/health" 5 5
 
 echo ""

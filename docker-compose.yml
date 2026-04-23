@@ -287,7 +287,7 @@ services:
   # Spark — 배치 처리
   # ──────────────────────────────────────
   spark-master:
-    image: apache/spark:3.5.1
+    image: apache/spark:3.5.8
     container_name: lab-spark-master
     command:
       - /opt/spark/bin/spark-class
@@ -304,7 +304,10 @@ services:
     volumes:
       - ./spark-etl:/opt/spark-etl
       - ./spark-jobs:/opt/spark-jobs
-      - ./data:/data
+      - ./data/sample:/data/sample:ro
+      - ./data/settlement:/data/settlement:ro
+      - ./data/lakehouse:/data/lakehouse
+      - ./logs/spark:/opt/spark-events
     networks:
       - pipeline-net
     healthcheck:
@@ -314,7 +317,7 @@ services:
       retries: 10
 
   spark-worker:
-    image: apache/spark:3.5.1
+    image: apache/spark:3.5.8
     container_name: lab-spark-worker
     command:
       - /opt/spark/bin/spark-class
@@ -332,7 +335,10 @@ services:
     volumes:
       - ./spark-etl:/opt/spark-etl
       - ./spark-jobs:/opt/spark-jobs
-      - ./data:/data
+      - ./data/sample:/data/sample:ro
+      - ./data/settlement:/data/settlement:ro
+      - ./data/lakehouse:/data/lakehouse
+      - ./logs/spark:/opt/spark-events
     networks:
       - pipeline-net
 
