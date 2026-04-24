@@ -30,6 +30,9 @@ def create_spark_session(config_file_path: str = "config/etl_config.yaml") -> Sp
 
         for key, value in spark_conf["config"].items():
             builder = builder.config(key, str(value))
+
+        # Week 3 NiFi 이벤트 시간과 같은 기준으로 UTC를 고정한다.
+        builder = builder.config("spark.sql.session.timeZone", "UTC")
         #Delta Lake JAR 패키지(로컬 실습 환경)
         builder = builder.config(
             "spark.jars.packages",

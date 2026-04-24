@@ -567,7 +567,10 @@ docker compose up -d nifi
   # Spark — 배치 처리
   # ──────────────────────────────────────
   spark-master:
-    image: apache/spark:3.5.8
+    build:
+      context: .
+      dockerfile: config/spark/Dockerfile
+    image: study-data-pipeline/spark:3.5.8
     container_name: lab-spark-master
     command:
       - /opt/spark/bin/spark-class
@@ -584,7 +587,10 @@ docker compose up -d nifi
     volumes:
       - ./spark-etl:/opt/spark-etl
       - ./spark-jobs:/opt/spark-jobs
-      - ./data:/data
+      - ./data/sample:/data/sample:ro
+      - ./data/settlement:/data/settlement:ro
+      - ./data/lakehouse:/data/lakehouse
+      - ./logs/spark:/opt/spark-events
     networks:
       - pipeline-net
     healthcheck:
@@ -594,7 +600,10 @@ docker compose up -d nifi
       retries: 10
 
   spark-worker:
-    image: apache/spark:3.5.8
+    build:
+      context: .
+      dockerfile: config/spark/Dockerfile
+    image: study-data-pipeline/spark:3.5.8
     container_name: lab-spark-worker
     command:
       - /opt/spark/bin/spark-class
@@ -612,12 +621,15 @@ docker compose up -d nifi
     volumes:
       - ./spark-etl:/opt/spark-etl
       - ./spark-jobs:/opt/spark-jobs
-      - ./data:/data
+      - ./data/sample:/data/sample:ro
+      - ./data/settlement:/data/settlement:ro
+      - ./data/lakehouse:/data/lakehouse
+      - ./logs/spark:/opt/spark-events
     networks:
       - pipeline-net
 ```
 
-> 참고: Spark는 `bitnami/spark` 대신 공식 이미지 `apache/spark:3.5.8` 기준으로 구성하며, `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
+> 참고: Spark는 `bitnami/spark` 대신 `config/spark/Dockerfile` 기반 커스텀 이미지 `study-data-pipeline/spark:3.5.8`로 구성한다. 이 이미지는 `PyYAML`를 기본 포함하고 `spark` 사용자의 홈 디렉터리를 `/home/spark`로 고정해 `spark-submit --packages` 실행 시 Ivy cache가 `/nonexistent`로 깨지는 문제를 예방한다. 실행 방식은 `SPARK_MODE` 환경변수 방식이 아니라 `spark-class` 명령으로 Master/Worker를 직접 기동한다.
 
 ### 3-3. Airflow 서비스 추가
 

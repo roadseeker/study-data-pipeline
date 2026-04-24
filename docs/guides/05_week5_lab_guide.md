@@ -2423,23 +2423,26 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 
 ## Week 5 산출물 체크리스트
 
+2026-04-24 검증 기준으로 Day 1 완료 조건을 충족했다. `docs/spark-concepts.md` 작성, `spark-etl` 프로젝트 구조 생성, `spark-etl/config/etl_config.yaml` 설정 파일 작성, `spark-etl/lib/schema_registry.py` 스키마 레지스트리 정의, `spark-etl/scripts/generate_sample_data.py` 실행, `jobs/kafka_batch_read_test.py`의 Kafka 배치 읽기 성공을 확인했다.
+
+
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docs/spark-concepts.md (Spark 핵심 개념 정리) | ☐ |
-| 2 | config/etl_config.yaml (ETL 설정 파일) | ☐ |
+| 1 | docs/spark-concepts.md (Spark 핵심 개념 정리) | ☑ |
+| 2 | config/etl_config.yaml (ETL 설정 파일) | ☑ |
 | 3 | config/quality_rules.yaml (데이터 품질 규칙 정의) | ☐ |
-| 4 | lib/spark_session_factory.py (SparkSession 팩토리) | ☐ |
-| 5 | lib/schema_registry.py (Bronze·Silver·Gold 스키마) | ☐ |
+| 4 | lib/spark_session_factory.py (SparkSession 팩토리) | ☑ |
+| 5 | lib/schema_registry.py (Bronze·Silver·Gold 스키마) | ☑ |
 | 6 | lib/quality_checker.py (데이터 품질 검증 모듈) | ☐ |
 | 7 | lib/delta_utils.py (Delta Lake 유틸리티) | ☐ |
 | 8 | lib/metrics_collector.py (ETL 메트릭 수집기) | ☐ |
-| 9 | jobs/kafka_batch_read_test.py (Kafka 배치 읽기 테스트) | ☐ |
+| 9 | jobs/kafka_batch_read_test.py (Kafka 배치 읽기 테스트) | ☑ |
 | 10 | jobs/bronze_ingestion.py (Bronze 적재 — Kafka) | ☐ |
 | 11 | jobs/bronze_ingestion_file.py (Bronze 적재 — 파일) | ☐ |
 | 12 | jobs/silver_transformation.py (Silver 변환 + 품질 검증) | ☐ |
 | 13 | jobs/gold_aggregation.py (Gold 3종 집계) | ☐ |
 | 14 | jobs/full_etl_pipeline.py (전체 ETL 오케스트레이션) | ☐ |
-| 15 | scripts/generate_sample_data.py (샘플 데이터 생성기) | ☐ |
+| 15 | scripts/generate_sample_data.py (샘플 데이터 생성기) | ☑ |
 | 16 | scripts/verify_bronze.py (Bronze 검증) | ☐ |
 | 17 | scripts/verify_etl_pipeline.sh (통합 검증 스크립트) | ☐ |
 | 18 | scripts/delta_time_travel_demo.py (타임 트래블 데모) | ☐ |

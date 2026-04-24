@@ -87,6 +87,7 @@ Use this framing consistently in:
 - Keep architecture and operations documents clear enough for technical stakeholders.
 - When creating new docs, explain purpose, assumptions, steps, expected outputs, and validation points.
 - Weekly deliverables should feel demo-ready and portfolio-ready.
+- In weekly lab guides, keep `Day N 완료 기준` in the day section itself, and record dated completion verification notes at the start of that week's deliverables checklist section.
 
 ## Implementation Standards
 
