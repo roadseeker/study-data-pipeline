@@ -6,10 +6,11 @@
 """
 import yaml
 from datetime import datetime, timedelta
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List
 
 
 @dataclass
@@ -74,7 +75,7 @@ class QualityChecker:
     # 반환값은 (clean_df, quarantine_df, report) 형태의 튜플이다.
     # tuple은 파이썬의 여러 값을 한 번에 묶는 자료형입니다. 여기서는 세 가지 값을 하나의 묶음으로 반환하기 위해 튜플을 사용합니다.
     # 받을 때도 clean_df, quarantine_df, report = checker.validate(df, "2026-04-27")처럼 튜플 언패킹을 통해 각각의 값을 개별 변수로 쉽게 사용할 수 있습니다.
-    def validate(self, df: DataFrame, processing_date: str) -> tuple: 
+    def validate(self, df: DataFrame, processing_date: str) -> tuple:
         """
         DataFrame에 품질 규칙을 적용한다.
         Returns:
@@ -91,8 +92,6 @@ class QualityChecker:
         df = df.withColumn("_is_quarantined", F.lit(False))
 
         for rule in self.rules:
-            rule_id = rule["id"]
-            severity = rule["severity"]
             rule_type = rule["type"]
 
             if rule_type == "completeness":
@@ -147,14 +146,8 @@ class QualityChecker:
 
     # 앞의 _는 **“이 메서드는 내부용(private 성격)이다”**라는 관례입니다. 
     # 실제로는 외부에서도 호출할 수 있지만, 개발자들에게 이 메서드는 클래스 내부에서만 사용하기 위한 것임을 알리는 역할을 합니다.
-    def _check_completeness(self, df, rule) -> tuple:
-        """필수 필드 null 체크"""
-        fields = rule["fields"]
-        condition = F.lit(False)
-        for field_name in fields:
-            if field_name in df.columns:
-                condition = condition | F.col(field_name).isNull()
-
+    @staticmethod
+    def _apply_rule_result(df: DataFrame, rule, condition) -> tuple:
         failed_count = df.filter(condition).count()
         passed_count = df.count() - failed_count
 
@@ -166,9 +159,10 @@ class QualityChecker:
         else:
             df = df.withColumn(
                 "_quality_flags",
-                F.when(condition,
-                       F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-                .otherwise(F.col("_quality_flags"))
+                F.when(
+                    condition,
+                    F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"])))
+                ).otherwise(F.col("_quality_flags"))
             )
 
         result = QualityResult(
@@ -179,10 +173,21 @@ class QualityChecker:
         )
         return df, result
 
-    def _check_uniqueness(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_completeness(df, rule) -> tuple:
+        """필수 필드 null 체크"""
+        fields = rule["fields"]
+        condition = F.lit(False)
+        for field_name in fields:
+            if field_name in df.columns:
+                condition = condition | F.col(field_name).isNull()
+
+        return QualityChecker._apply_rule_result(df, rule, condition)
+
+    @staticmethod
+    def _check_uniqueness(df, rule) -> tuple:
         """중복 체크"""
         key_fields = rule["key_fields"]
-        from pyspark.sql.window import Window
 
         # 중복 건수 계산
         dup_df = df.groupBy(key_fields).count().filter(F.col("count") > 1)
@@ -207,7 +212,8 @@ class QualityChecker:
         )
         return df, result
 
-    def _check_validity(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_validity(df, rule) -> tuple:
         """유효성 체크 (허용값 또는 범위)"""
         field_name = rule["field"]
 
@@ -225,51 +231,14 @@ class QualityChecker:
 
         # null은 별도 규칙에서 처리하므로 여기서는 제외
         condition = condition & F.col(field_name).isNotNull()
-        failed_count = df.filter(condition).count()
-        passed_count = df.count() - failed_count
+        return QualityChecker._apply_rule_result(df, rule, condition)
 
-        if rule["severity"] == "critical":
-            df = df.withColumn(
-                "_is_quarantined",
-                F.when(condition, True).otherwise(F.col("_is_quarantined"))
-            )
-        else:
-            df = df.withColumn(
-                "_quality_flags",
-                F.when(condition,
-                       F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-                .otherwise(F.col("_quality_flags"))
-            )
-
-        result = QualityResult(
-            rule_id=rule["id"], rule_name=rule["name"],
-            severity=rule["severity"], total_records=0,
-            passed_records=passed_count, failed_records=failed_count,
-            pass_rate=passed_count / max(passed_count + failed_count, 1),
-        )
-        return df, result
-
-    def _check_timeliness(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_timeliness(df, rule) -> tuple:
         """적시성 체크"""
         field_name = rule["field"]
         max_delay = rule["max_delay_hours"]
         cutoff = datetime.now() - timedelta(hours=max_delay)
 
-        condition = F.col(field_name) < F.lit(cutoff)
-        failed_count = df.filter(condition & F.col(field_name).isNotNull()).count()
-        passed_count = df.count() - failed_count
-
-        df = df.withColumn(
-            "_quality_flags",
-            F.when(condition & F.col(field_name).isNotNull(),
-                   F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-            .otherwise(F.col("_quality_flags"))
-        )
-
-        result = QualityResult(
-            rule_id=rule["id"], rule_name=rule["name"],
-            severity=rule["severity"], total_records=0,
-            passed_records=passed_count, failed_records=failed_count,
-            pass_rate=passed_count / max(passed_count + failed_count, 1),
-        )
-        return df, result
+        condition = (F.col(field_name) < F.lit(cutoff)) & F.col(field_name).isNotNull()
+        return QualityChecker._apply_rule_result(df, rule, condition)
