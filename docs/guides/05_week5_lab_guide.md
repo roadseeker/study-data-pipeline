@@ -894,6 +894,11 @@ if __name__ == "__main__":
     run_bronze_ingestion(target_date)
 PYEOF
 ```
+```bash
+docker exec -w /opt/spark-etl lab-spark-master spark-submit \
+  --packages io.delta:delta-spark_2.12:3.1.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.8 \
+  /opt/spark-etl/jobs/bronze_ingestion.py 2026-04-21
+```
 
 ### 2-3. 샘플 데이터 기반 Bronze 적재 (Kafka 미사용 대체 경로)
 
@@ -1039,6 +1044,13 @@ def verify():
 if __name__ == "__main__":
     verify()
 PYEOF
+```
+
+
+```bash
+docker exec -w /opt/spark-etl lab-spark-master /opt/spark/bin/spark-submit \
+  --packages io.delta:delta-spark_2.12:3.1.0 \
+  /opt/spark-etl/scripts/verify_bronze.py
 ```
 
 **Day 2 완료 기준**: Bronze 적재 Job(Kafka 및 파일 기반) 구현 완료, Delta Lake 테이블 생성 확인, 멱등성(MERGE) 로직 검증, 파티셔닝(ingest_date) 정상 확인, 검증 스크립트 통과.
@@ -2425,6 +2437,8 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 
 2026-04-24 검증 기준으로 Day 1 완료 조건을 충족했다. `docs/spark-concepts.md` 작성, `spark-etl` 프로젝트 구조 생성, `spark-etl/config/etl_config.yaml` 설정 파일 작성, `spark-etl/lib/schema_registry.py` 스키마 레지스트리 정의, `spark-etl/scripts/generate_sample_data.py` 실행, `jobs/kafka_batch_read_test.py`의 Kafka 배치 읽기 성공을 확인했다.
 
+2026-04-27 검증 기준으로 Day 2 완료 조건을 충족했다. `jobs/bronze_ingestion.py`와 `jobs/bronze_ingestion_file.py`를 구현하고, Kafka 원본(`2026-04-21`) 140건의 Bronze 적재 성공, Delta Lake 테이블 생성 확인, `ingest_date` 파티셔닝 확인, 동일 처리일자 재실행 시 적재 건수 140건 유지로 MERGE 멱등성 검증 통과, `scripts/verify_bronze.py` 검증 리포트 통과를 확인했다.
+
 
 | # | 산출물 | 완료 |
 |---|--------|------|
@@ -2437,13 +2451,13 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 | 7 | lib/delta_utils.py (Delta Lake 유틸리티) | ☐ |
 | 8 | lib/metrics_collector.py (ETL 메트릭 수집기) | ☐ |
 | 9 | jobs/kafka_batch_read_test.py (Kafka 배치 읽기 테스트) | ☑ |
-| 10 | jobs/bronze_ingestion.py (Bronze 적재 — Kafka) | ☐ |
-| 11 | jobs/bronze_ingestion_file.py (Bronze 적재 — 파일) | ☐ |
+| 10 | jobs/bronze_ingestion.py (Bronze 적재 — Kafka) | ☑ |
+| 11 | jobs/bronze_ingestion_file.py (Bronze 적재 — 파일) | ☑ |
 | 12 | jobs/silver_transformation.py (Silver 변환 + 품질 검증) | ☐ |
 | 13 | jobs/gold_aggregation.py (Gold 3종 집계) | ☐ |
 | 14 | jobs/full_etl_pipeline.py (전체 ETL 오케스트레이션) | ☐ |
 | 15 | scripts/generate_sample_data.py (샘플 데이터 생성기) | ☑ |
-| 16 | scripts/verify_bronze.py (Bronze 검증) | ☐ |
+| 16 | scripts/verify_bronze.py (Bronze 검증) | ☑ |
 | 17 | scripts/verify_etl_pipeline.sh (통합 검증 스크립트) | ☐ |
 | 18 | scripts/delta_time_travel_demo.py (타임 트래블 데모) | ☐ |
 | 19 | scripts/delta_maintenance.sh (Delta 유지보수) | ☐ |

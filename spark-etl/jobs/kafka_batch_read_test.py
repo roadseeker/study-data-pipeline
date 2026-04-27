@@ -59,7 +59,7 @@ def main():
         .select(
             col("key").cast("string").alias("key"),
             col("value").cast("string").alias("value"),
-            "topic", "partition", "offset", "timestamp"
+            "topic", "partition", "offset", "timestamp" // Kafka 메시지의 메타데이터도 함께 출력
         )
         .orderBy("timestamp")
         .show(5, truncate=80)

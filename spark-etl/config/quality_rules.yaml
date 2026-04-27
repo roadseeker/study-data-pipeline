@@ -1,0 +1,59 @@
+# Nexus Pay 데이터 품질 규칙 정의
+rules:
+  # ── 완전성(Completeness) 규칙 ──
+  - id: "CMP-001"
+    name: "필수 필드 null 체크"
+    type: "completeness"
+    severity: "critical"          # critical: 제거, warning: 플래그만
+    fields: ["tx_id", "user_id", "tx_type", "amount", "timestamp"]
+    description: "필수 필드에 null이 있으면 해당 레코드를 격리한다."
+
+  # ── 유일성(Uniqueness) 규칙 ──
+  - id: "UNQ-001"
+    name: "거래 ID 중복 체크"
+    type: "uniqueness"
+    severity: "critical"
+    key_fields: ["tx_id"]
+    strategy: "keep_latest"       # 중복 시 최신 레코드 유지
+    description: "동일 tx_id가 2건 이상이면 최신 1건만 유지한다."
+
+  # ── 유효성(Validity) 규칙 ──
+  - id: "VLD-001"
+    name: "거래 유형 허용값 체크"
+    type: "validity"
+    severity: "critical"
+    field: "tx_type"
+    allowed_values: ["PAYMENT", "REFUND", "TRANSFER", "WITHDRAWAL"]
+
+  - id: "VLD-002"
+    name: "거래 금액 범위 체크"
+    type: "validity"
+    severity: "warning"
+    field: "amount"
+    min_value: 100
+    max_value: 50000000
+    description: "100원 미만 또는 5천만원 초과 거래를 이상값으로 플래그한다."
+
+  - id: "VLD-003"
+    name: "거래 상태 허용값 체크"
+    type: "validity"
+    severity: "critical"
+    field: "status"
+    allowed_values: ["SUCCESS", "FAILED", "PENDING"]
+
+  - id: "VLD-004"
+    name: "금액 양수 체크"
+    type: "validity"
+    severity: "critical"
+    field: "amount"
+    min_value: 0
+    description: "음수 금액은 비정상이므로 격리한다."
+
+  # ── 적시성(Timeliness) 규칙 ──
+  - id: "TML-001"
+    name: "타임스탬프 범위 체크"
+    type: "timeliness"
+    severity: "warning"
+    field: "timestamp"
+    max_delay_hours: 48
+    description: "처리 시점 기준 48시간 이전 이벤트를 지연 데이터로 플래그한다."
