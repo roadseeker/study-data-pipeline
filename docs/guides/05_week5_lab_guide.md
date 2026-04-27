@@ -641,6 +641,12 @@ PYEOF
 cd spark-etl && python3 scripts/generate_sample_data.py
 ```
 
+> 경로 확인: 위 명령은 `spark-etl` 디렉터리 안에서 실행하므로 샘플 파일은
+> `spark-etl/data/sample/transactions_sample.jsonl`에 생성된다. 이 파일은
+> Docker Compose의 `./spark-etl:/opt/spark-etl` 마운트를 통해 컨테이너 안에서
+> `/opt/spark-etl/data/sample/transactions_sample.jsonl`로 보인다.
+> 반대로 `/data/sample`은 저장소 루트의 `./data/sample` 마운트 경로다.
+
 ### 1-7. Kafka 배치 읽기 연동 테스트
 
 Spark가 Kafka 토픽을 배치 모드로 읽을 수 있는지 검증한다.
@@ -977,10 +983,16 @@ PYEOF
 ```
 
 ```bash
-docker exec -w /opt/spark-etl lab-spark-master spark-submit \
+docker exec -w /opt/spark-etl lab-spark-master /opt/spark/bin/spark-submit \
   --packages io.delta:delta-spark_2.12:3.1.0 \
-  /opt/spark-etl/jobs/bronze_ingestion_file.py /data/sample/transactions_sample.jsonl 2026-03-31
+  /opt/spark-etl/jobs/bronze_ingestion_file.py /opt/spark-etl/data/sample/transactions_sample.jsonl 2026-03-31
 ```
+
+> `[PATH_NOT_FOUND] Path does not exist`가 발생하면 먼저 컨테이너 기준 입력 경로를 확인한다.
+> `docker-compose.yml`의 `/data/sample`은 저장소 루트의 `./data/sample`을 가리키고,
+> `/opt/spark-etl/data/sample`은 `./spark-etl/data/sample`을 가리킨다. 샘플 생성기를
+> `cd spark-etl && python3 scripts/generate_sample_data.py`로 실행했다면
+> `/opt/spark-etl/data/sample/transactions_sample.jsonl` 경로를 사용해야 한다.
 
 ### 2-4. Bronze 적재 검증
 
