@@ -433,18 +433,18 @@ BRONZE_SCHEMA = StructType([
 # Silver: 정제·표준화된 거래 데이터
 # ──────────────────────────────────────────────
 SILVER_SCHEMA = StructType([
-    StructField("tx_id", StringType(), False),              # 거래 고유 ID
-    StructField("user_id", StringType(), False),            # 사용자 ID
-    StructField("tx_type", StringType(), False),            # PAYMENT / REFUND / TRANSFER
+    StructField("event_id", StringType(), False),           # 표준 이벤트 고유 ID
+    StructField("user_id", IntegerType(), False),           # 사용자 ID
+    StructField("event_type", StringType(), False),         # PAYMENT / REFUND / TRANSFER
     StructField("amount", DoubleType(), False),             # 거래 금액 (원)
     StructField("currency", StringType(), False),           # 통화 (KRW 기본)
     StructField("merchant_id", StringType(), True),         # 가맹점 ID
     StructField("merchant_category", StringType(), True),   # 가맹점 업종 코드
-    StructField("status", StringType(), False),             # SUCCESS / FAILED / PENDING
+    StructField("status", StringType(), False),             # COMPLETED / FAILED / PENDING
     StructField("event_timestamp", TimestampType(), False), # 이벤트 발생 시점
     StructField("tx_date", DateType(), False),              # 파티션 키: 거래 일자
     StructField("tx_hour", IntegerType(), False),           # 거래 시간 (0~23)
-    StructField("source_system", StringType(), True),       # 데이터 소스 (api/csv/db)
+    StructField("data_source", StringType(), True),         # 데이터 소스 (payment-api/csv/db)
     StructField("is_anomaly", BooleanType(), False),        # 이상값 플래그
     StructField("quality_flags", StringType(), True),       # 품질 플래그 (쉼표 구분)
     StructField("processed_timestamp", TimestampType(), False),
@@ -513,45 +513,59 @@ Kafka에 적재된 데이터를 시뮬레이션하는 샘플 데이터 생성기
 cat > spark-etl/scripts/generate_sample_data.py << 'PYEOF'
 """
 Nexus Pay 샘플 거래 데이터 생성기
-- Kafka 토픽에 적재되는 형식과 동일한 JSON 생성
+- NiFi 표준 스키마와 동일한 JSON 생성
 - Bronze 레이어 테스트용 CSV/JSON 파일 생성
+- 의도적으로 중복, null, 이상값을 섞어서 Silver 품질 검증 테스트 가능하게 만들기
+- data/sample/transactions_sample.jsonl에 JSON Lines 형식으로 저장
 """
 import json
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import os
 
 
 # 설정
-NUM_RECORDS = 10000
-TARGET_DATE = datetime(2026, 3, 31)
+NUM_RECORDS = 10000                 # 기본 정산 거래 1만건 생성
+TARGET_DATE = datetime(2026, 3, 31, tzinfo=timezone.utc)
 OUTPUT_DIR = "data/sample"
 
 # 데이터 풀
-TX_TYPES = ["PAYMENT", "REFUND", "TRANSFER"]
-TX_TYPE_WEIGHTS = [0.7, 0.15, 0.15]
-STATUSES = ["SUCCESS", "FAILED", "PENDING"]
-STATUS_WEIGHTS = [0.92, 0.05, 0.03]
-SOURCES = ["api", "csv", "db"]
-SOURCE_WEIGHTS = [0.6, 0.25, 0.15]
-CURRENCIES = ["KRW"]
-MERCHANT_CATEGORIES = ["F&B", "RETAIL", "ONLINE", "TRAVEL", "FINANCE", "HEALTH"]
+EVENT_TYPES = ["PAYMENT", "REFUND", "TRANSFER"]  # 거래 유형
+EVENT_TYPE_WEIGHTS = [0.7, 0.15, 0.15]           # 거래 유형 가중치
+STATUSES = ["COMPLETED", "FAILED", "PENDING"]    # 거래 상태
+STATUS_WEIGHTS = [0.92, 0.05, 0.03]              # 거래 상태 가중치
+DATA_SOURCES = ["payment-api", "settlement-csv", "customer-db"]  # 유입소스
+DATA_SOURCE_WEIGHTS = [0.6, 0.25, 0.15]          # 유입소스 가중치
+CURRENCIES = ["KRW"]                             # 통화
+CHANNELS = ["APP", "WEB", "POS", "ATM"]
 
-USER_IDS = [f"USR-{i:05d}" for i in range(1, 201)]           # 200명
-MERCHANT_IDS = [f"MRC-{i:04d}" for i in range(1, 51)]        # 50개 가맹점
+USER_IDS = list(range(1001, 1201))  # 사용자 아이디-200명
+MERCHANTS = [
+    {"id": "MCH-101", "name": "스타벅스 강남점", "category": "CAFE"},
+    {"id": "MCH-202", "name": "쿠팡 온라인", "category": "ECOMMERCE"},
+    {"id": "MCH-303", "name": "GS25 역삼점", "category": "CONVENIENCE"},
+    {"id": "MCH-404", "name": "현대백화점 판교", "category": "DEPARTMENT"},
+    {"id": "MCH-505", "name": "배달의민족", "category": "DELIVERY"},
+    {"id": "MCH-606", "name": "넷플릭스 코리아", "category": "SUBSCRIPTION"},
+]
 
 
 def generate_event(event_time: datetime) -> dict:
     """단일 거래 이벤트를 생성한다."""
-    tx_type = random.choices(TX_TYPES, TX_TYPE_WEIGHTS)[0]
+
+    # PAYMENT: 비교적 일반적인 결제 금액
+    # REFUND: 결제보다 조금 작은 환불 분포
+    # TRANSFER: 더 큰 금액 분포
+    event_type = random.choices(EVENT_TYPES, EVENT_TYPE_WEIGHTS)[0]
+    # COMPLETED / FAILED / PENDING
     status = random.choices(STATUSES, STATUS_WEIGHTS)[0]
 
     # 금액: 거래 유형별 다른 분포
-    if tx_type == "PAYMENT":
+    if event_type == "PAYMENT":
         amount = round(random.lognormvariate(10, 1.5), 0)     # 중앙값 약 2만원
         amount = max(100, min(amount, 10_000_000))
-    elif tx_type == "REFUND":
+    elif event_type == "REFUND":
         amount = round(random.lognormvariate(9.5, 1.2), 0)
         amount = max(100, min(amount, 5_000_000))
     else:  # TRANSFER
@@ -563,30 +577,55 @@ def generate_event(event_time: datetime) -> dict:
     if random.random() < 0.02:
         is_anomaly = True
         amount = random.choice([
-            random.uniform(50_000_000, 100_000_000),    # 고액 이상거래
+            random.uniform(50_000_000, 100_000_000),     # 고액 이상거래
             random.uniform(1, 50),                       # 극소액 이상거래
-            -abs(amount),                                # 음수 금액
+            -abs(amount),                                       # 음수 금액
         ])
 
-    # 중복 삽입 (약 1%)
-    tx_id = str(uuid.uuid4())
+    merchant = random.choice(MERCHANTS)
+    merchant_info = merchant if event_type != "TRANSFER" else None
+    data_source = random.choices(DATA_SOURCES, DATA_SOURCE_WEIGHTS)[0]
+    event_id = str(uuid.uuid4())
+    ingested_at = event_time.isoformat().replace("+00:00", "Z")
 
     event = {
-        "tx_id": tx_id,
+        "event_id": event_id,
+        "event_type": event_type,
         "user_id": random.choice(USER_IDS),
-        "tx_type": tx_type,
-        "amount": round(amount, 0),
+        "amount": float(round(amount, 0)),
         "currency": random.choice(CURRENCIES),
-        "merchant_id": random.choice(MERCHANT_IDS) if tx_type != "TRANSFER" else None,
-        "merchant_category": random.choice(MERCHANT_CATEGORIES) if tx_type != "TRANSFER" else None,
+        "merchant_id": merchant_info["id"] if merchant_info else None,
+        "merchant_name": merchant_info["name"] if merchant_info else None,
+        "merchant_category": merchant_info["category"] if merchant_info else None,
+        "channel": random.choice(CHANNELS),
         "status": status,
-        "timestamp": event_time.isoformat(),
-        "source": random.choices(SOURCES, SOURCE_WEIGHTS)[0],
+        "is_suspicious": is_anomaly,
+        "event_timestamp": event_time.isoformat().replace("+00:00", "Z"),
+        "ingested_at": ingested_at,
+        "data_source": data_source,
+        "schema_version": "1.0",
+        "created_at": event_time.isoformat().replace("+00:00", "Z"),
+        "fee_amount": None,
+        "net_amount": None,
+        "tx_count": None,
+        "batch_id": None,
+        "customer_name": None,
+        "customer_email": None,
+        "customer_phone": None,
+        "customer_grade": None,
+        "is_active": None,
     }
+
+    if data_source == "settlement-csv":
+        event["channel"] = "BATCH"
+        event["batch_id"] = f"BATCH-{TARGET_DATE.strftime('%Y%m%d')}"
+        event["tx_count"] = random.randint(1, 20)
+        event["fee_amount"] = round(event["amount"] * random.uniform(0.005, 0.03), 2)
+        event["net_amount"] = round(event["amount"] - event["fee_amount"], 2)
 
     # null 삽입 (약 1.5%)
     if random.random() < 0.015:
-        null_field = random.choice(["user_id", "tx_type", "amount"])
+        null_field = random.choice(["user_id", "event_type", "amount"])
         event[null_field] = None
 
     return event
@@ -640,12 +679,6 @@ PYEOF
 ```bash
 cd spark-etl && python3 scripts/generate_sample_data.py
 ```
-
-> 경로 확인: 위 명령은 `spark-etl` 디렉터리 안에서 실행하므로 샘플 파일은
-> `spark-etl/data/sample/transactions_sample.jsonl`에 생성된다. 이 파일은
-> Docker Compose의 `./spark-etl:/opt/spark-etl` 마운트를 통해 컨테이너 안에서
-> `/opt/spark-etl/data/sample/transactions_sample.jsonl`로 보인다.
-> 반대로 `/data/sample`은 저장소 루트의 `./data/sample` 마운트 경로다.
 
 ### 1-7. Kafka 배치 읽기 연동 테스트
 
@@ -983,16 +1016,10 @@ PYEOF
 ```
 
 ```bash
-docker exec -w /opt/spark-etl lab-spark-master /opt/spark/bin/spark-submit \
+docker exec -w /opt/spark-etl lab-spark-master spark-submit \
   --packages io.delta:delta-spark_2.12:3.1.0 \
-  /opt/spark-etl/jobs/bronze_ingestion_file.py /opt/spark-etl/data/sample/transactions_sample.jsonl 2026-03-31
+  /opt/spark-etl/jobs/bronze_ingestion_file.py /data/sample/transactions_sample.jsonl 2026-03-31
 ```
-
-> `[PATH_NOT_FOUND] Path does not exist`가 발생하면 먼저 컨테이너 기준 입력 경로를 확인한다.
-> `docker-compose.yml`의 `/data/sample`은 저장소 루트의 `./data/sample`을 가리키고,
-> `/opt/spark-etl/data/sample`은 `./spark-etl/data/sample`을 가리킨다. 샘플 생성기를
-> `cd spark-etl && python3 scripts/generate_sample_data.py`로 실행했다면
-> `/opt/spark-etl/data/sample/transactions_sample.jsonl` 경로를 사용해야 한다.
 
 ### 2-4. Bronze 적재 검증
 
@@ -1033,13 +1060,14 @@ def verify():
     print(f"\n5. 샘플 데이터 (kafka_value 파싱):")
     from pyspark.sql.types import StructType, StructField, StringType, DoubleType
     sample_schema = StructType([
-        StructField("tx_id", StringType()),
-        StructField("tx_type", StringType()),
+        StructField("event_id", StringType()),
+        StructField("event_type", StringType()),
         StructField("amount", DoubleType()),
+        StructField("data_source", StringType()),
     ])
     (
         df.select(F.from_json("kafka_value", sample_schema).alias("parsed"))
-        .select("parsed.tx_id", "parsed.tx_type", "parsed.amount")
+        .select("parsed.event_id", "parsed.event_type", "parsed.amount", "parsed.data_source")
         .show(10, truncate=False)
     )
 
@@ -1084,7 +1112,7 @@ rules:
     name: "필수 필드 null 체크"
     type: "completeness"
     severity: "critical"          # critical: 제거, warning: 플래그만
-    fields: ["tx_id", "user_id", "tx_type", "amount", "timestamp"]
+    fields: ["event_id", "user_id", "event_type", "amount", "event_timestamp"]
     description: "필수 필드에 null이 있으면 해당 레코드를 격리한다."
 
   # ── 유일성(Uniqueness) 규칙 ──
@@ -1092,16 +1120,16 @@ rules:
     name: "거래 ID 중복 체크"
     type: "uniqueness"
     severity: "critical"
-    key_fields: ["tx_id"]
+    key_fields: ["event_id"]
     strategy: "keep_latest"       # 중복 시 최신 레코드 유지
-    description: "동일 tx_id가 2건 이상이면 최신 1건만 유지한다."
+    description: "동일 event_id가 2건 이상이면 최신 1건만 유지한다."
 
   # ── 유효성(Validity) 규칙 ──
   - id: "VLD-001"
     name: "거래 유형 허용값 체크"
     type: "validity"
     severity: "critical"
-    field: "tx_type"
+    field: "event_type"
     allowed_values: ["PAYMENT", "REFUND", "TRANSFER", "WITHDRAWAL"]
 
   - id: "VLD-002"
@@ -1118,7 +1146,7 @@ rules:
     type: "validity"
     severity: "critical"
     field: "status"
-    allowed_values: ["SUCCESS", "FAILED", "PENDING"]
+    allowed_values: ["COMPLETED", "FAILED", "PENDING"]
 
   - id: "VLD-004"
     name: "금액 양수 체크"
@@ -1133,7 +1161,7 @@ rules:
     name: "타임스탬프 범위 체크"
     type: "timeliness"
     severity: "warning"
-    field: "timestamp"
+    field: "event_timestamp"
     max_delay_hours: 48
     description: "처리 시점 기준 48시간 이전 이벤트를 지연 데이터로 플래그한다."
 EOF
@@ -1149,10 +1177,11 @@ cat > spark-etl/lib/quality_checker.py << 'PYEOF'
 """
 import yaml
 from datetime import datetime, timedelta
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List
 
 
 @dataclass
@@ -1205,10 +1234,19 @@ class QualityReport:
 
 class QualityChecker:
     """데이터 품질 검증기"""
+    # __init__()는 파이썬에서 객체가 생성될 때 자동으로 실행되는 초기화 메서드이다.
+    # rules_path 매개변수로 품질 규칙이 정의된 YAML 파일의 경로를 받는다. 기본값은 "config/quality_rules.yaml"이다.
 
     def __init__(self, rules_path: str = "config/quality_rules.yaml"):
         with open(rules_path, "r") as f:
-            self.rules = yaml.safe_load(f)["rules"]
+            # 파이썬에서는 self.rules = ...처럼 처음 할당하는 순간 객체 속성이 동적으로 생성됩니다
+            self.rules = yaml.safe_load(f)["rules"] # YAML 파일에서 "rules" 키 아래에 있는 규칙 목록을 읽어서 self.rules 속성에 저장한다. 이후 이 객체의 다른 메서드에서 self.rules를 참조하여 검증 로직을 수행할 수 있다.
+
+    # 결과를 튜플로 반환하는 validate() 메서드 정의. 
+    # 입력으로는 검증할 DataFrame과 처리 일자를 문자열로 받는다. 
+    # 반환값은 (clean_df, quarantine_df, report) 형태의 튜플이다.
+    # tuple은 파이썬의 여러 값을 한 번에 묶는 자료형입니다. 여기서는 세 가지 값을 하나의 묶음으로 반환하기 위해 튜플을 사용합니다.
+    # 받을 때도 clean_df, quarantine_df, report = checker.validate(df, "2026-04-27")처럼 튜플 언패킹을 통해 각각의 값을 개별 변수로 쉽게 사용할 수 있습니다.
 
     def validate(self, df: DataFrame, processing_date: str) -> tuple:
         """
@@ -1227,18 +1265,16 @@ class QualityChecker:
         df = df.withColumn("_is_quarantined", F.lit(False))
 
         for rule in self.rules:
-            rule_id = rule["id"]
-            severity = rule["severity"]
             rule_type = rule["type"]
 
             if rule_type == "completeness":
-                df, result = self._check_completeness(df, rule)
+                df, result = self._check_completeness(df, rule, total_input)
             elif rule_type == "uniqueness":
-                df, result = self._check_uniqueness(df, rule)
+                df, result = self._check_uniqueness(df, rule, total_input)
             elif rule_type == "validity":
-                df, result = self._check_validity(df, rule)
+                df, result = self._check_validity(df, rule, total_input)
             elif rule_type == "timeliness":
-                df, result = self._check_timeliness(df, rule)
+                df, result = self._check_timeliness(df, rule, total_input, processing_date)
             else:
                 continue
 
@@ -1281,16 +1317,19 @@ class QualityChecker:
 
         return clean_df, quarantine_df, report
 
-    def _check_completeness(self, df, rule) -> tuple:
-        """필수 필드 null 체크"""
-        fields = rule["fields"]
-        condition = F.lit(False)
-        for field_name in fields:
-            if field_name in df.columns:
-                condition = condition | F.col(field_name).isNull()
-
-        failed_count = df.filter(condition).count()
-        passed_count = df.count() - failed_count
+    # 앞의 _는 **“이 메서드는 내부용(private 성격)이다”**라는 관례입니다. 
+    # 실제로는 외부에서도 호출할 수 있지만, 개발자들에게 이 메서드는 클래스 내부에서만 사용하기 위한 것임을 알리는 역할을 합니다.
+    @staticmethod
+    def _apply_rule_result(df: DataFrame, rule, condition, total_records: int) -> tuple:
+        stats = (
+            df.select(
+                F.count(F.lit(1)).alias("total_count"),
+                F.sum(F.when(condition, 1).otherwise(0)).alias("failed_count"),
+            )
+            .collect()[0]
+        )
+        failed_count = int(stats["failed_count"] or 0)
+        passed_count = total_records - failed_count
 
         if rule["severity"] == "critical":
             df = df.withColumn(
@@ -1300,9 +1339,10 @@ class QualityChecker:
         else:
             df = df.withColumn(
                 "_quality_flags",
-                F.when(condition,
-                       F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-                .otherwise(F.col("_quality_flags"))
+                F.when(
+                    condition,
+                    F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"])))
+                ).otherwise(F.col("_quality_flags"))
             )
 
         result = QualityResult(
@@ -1313,10 +1353,21 @@ class QualityChecker:
         )
         return df, result
 
-    def _check_uniqueness(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_completeness(df, rule, total_records: int) -> tuple:
+        """필수 필드 null 체크"""
+        fields = rule["fields"]
+        condition = F.lit(False)
+        for field_name in fields:
+            if field_name in df.columns:
+                condition = condition | F.col(field_name).isNull()
+
+        return QualityChecker._apply_rule_result(df, rule, condition, total_records)
+
+    @staticmethod
+    def _check_uniqueness(df, rule, total_records: int) -> tuple:
         """중복 체크"""
         key_fields = rule["key_fields"]
-        from pyspark.sql.window import Window
 
         # 중복 건수 계산
         dup_df = df.groupBy(key_fields).count().filter(F.col("count") > 1)
@@ -1332,7 +1383,7 @@ class QualityChecker:
             )
             df = df.drop("_row_num")
 
-        passed_count = df.count() - int(dup_count)
+        passed_count = total_records - int(dup_count)
         result = QualityResult(
             rule_id=rule["id"], rule_name=rule["name"],
             severity=rule["severity"], total_records=0,
@@ -1341,7 +1392,8 @@ class QualityChecker:
         )
         return df, result
 
-    def _check_validity(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_validity(df, rule, total_records: int) -> tuple:
         """유효성 체크 (허용값 또는 범위)"""
         field_name = rule["field"]
 
@@ -1359,54 +1411,18 @@ class QualityChecker:
 
         # null은 별도 규칙에서 처리하므로 여기서는 제외
         condition = condition & F.col(field_name).isNotNull()
-        failed_count = df.filter(condition).count()
-        passed_count = df.count() - failed_count
+        return QualityChecker._apply_rule_result(df, rule, condition, total_records)
 
-        if rule["severity"] == "critical":
-            df = df.withColumn(
-                "_is_quarantined",
-                F.when(condition, True).otherwise(F.col("_is_quarantined"))
-            )
-        else:
-            df = df.withColumn(
-                "_quality_flags",
-                F.when(condition,
-                       F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-                .otherwise(F.col("_quality_flags"))
-            )
-
-        result = QualityResult(
-            rule_id=rule["id"], rule_name=rule["name"],
-            severity=rule["severity"], total_records=0,
-            passed_records=passed_count, failed_records=failed_count,
-            pass_rate=passed_count / max(passed_count + failed_count, 1),
-        )
-        return df, result
-
-    def _check_timeliness(self, df, rule) -> tuple:
+    @staticmethod
+    def _check_timeliness(df, rule, total_records: int, processing_date: str) -> tuple:
         """적시성 체크"""
         field_name = rule["field"]
         max_delay = rule["max_delay_hours"]
-        cutoff = datetime.now() - timedelta(hours=max_delay)
+        processing_dt = datetime.fromisoformat(f"{processing_date}T23:59:59")
+        cutoff = processing_dt - timedelta(hours=max_delay)
 
-        condition = F.col(field_name) < F.lit(cutoff)
-        failed_count = df.filter(condition & F.col(field_name).isNotNull()).count()
-        passed_count = df.count() - failed_count
-
-        df = df.withColumn(
-            "_quality_flags",
-            F.when(condition & F.col(field_name).isNotNull(),
-                   F.concat(F.col("_quality_flags"), F.array(F.lit(rule["id"]))))
-            .otherwise(F.col("_quality_flags"))
-        )
-
-        result = QualityResult(
-            rule_id=rule["id"], rule_name=rule["name"],
-            severity=rule["severity"], total_records=0,
-            passed_records=passed_count, failed_records=failed_count,
-            pass_rate=passed_count / max(passed_count + failed_count, 1),
-        )
-        return df, result
+        condition = (F.col(field_name) < F.lit(cutoff)) & F.col(field_name).isNotNull()
+        return QualityChecker._apply_rule_result(df, rule, condition, total_records)
 PYEOF
 ```
 
@@ -1418,7 +1434,7 @@ cat > spark-etl/jobs/silver_transformation.py << 'PYEOF'
 Silver 변환 Job
 - Bronze에서 원본 JSON을 파싱하여 구조화된 스키마로 변환
 - 데이터 품질 검증 수행 (critical 위반 격리, warning 위반 플래그)
-- 정제된 데이터를 Silver Delta 테이블에 tx_date/tx_type 파티셔닝 저장
+- 정제된 데이터를 Silver Delta 테이블에 tx_date/event_type 파티셔닝 저장
 """
 import sys
 sys.path.insert(0, ".")
@@ -1426,7 +1442,7 @@ sys.path.insert(0, ".")
 from datetime import date, timedelta
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
-    StructType, StructField, StringType, DoubleType, TimestampType
+    StructType, StructField, StringType, DoubleType, IntegerType, BooleanType
 )
 
 from lib.spark_session_factory import create_spark_session, load_config
@@ -1435,16 +1451,31 @@ from lib.quality_checker import QualityChecker
 
 # Bronze의 kafka_value에 담긴 원본 JSON 스키마
 RAW_EVENT_SCHEMA = StructType([
-    StructField("tx_id", StringType(), True),
-    StructField("user_id", StringType(), True),
-    StructField("tx_type", StringType(), True),
+    StructField("event_id", StringType(), True),
+    StructField("event_type", StringType(), True),
+    StructField("user_id", IntegerType(), True),
     StructField("amount", DoubleType(), True),
     StructField("currency", StringType(), True),
     StructField("merchant_id", StringType(), True),
+    StructField("merchant_name", StringType(), True),
     StructField("merchant_category", StringType(), True),
+    StructField("channel", StringType(), True),
     StructField("status", StringType(), True),
-    StructField("timestamp", StringType(), True),
-    StructField("source", StringType(), True),
+    StructField("is_suspicious", BooleanType(), True),
+    StructField("event_timestamp", StringType(), True),
+    StructField("ingested_at", StringType(), True),
+    StructField("data_source", StringType(), True),
+    StructField("schema_version", StringType(), True),
+    StructField("created_at", StringType(), True),
+    StructField("fee_amount", DoubleType(), True),
+    StructField("net_amount", DoubleType(), True),
+    StructField("tx_count", IntegerType(), True),
+    StructField("batch_id", StringType(), True),
+    StructField("customer_name", StringType(), True),
+    StructField("customer_email", StringType(), True),
+    StructField("customer_phone", StringType(), True),
+    StructField("customer_grade", StringType(), True),
+    StructField("is_active", BooleanType(), True),
 ])
 
 
@@ -1490,16 +1521,16 @@ def run_silver_transformation(processing_date: date = None):
             "kafka_timestamp",
         )
         .select(
-            F.col("event.tx_id").alias("tx_id"),
+            F.col("event.event_id").alias("event_id"),
             F.col("event.user_id").alias("user_id"),
-            F.col("event.tx_type").alias("tx_type"),
+            F.col("event.event_type").alias("event_type"),
             F.col("event.amount").alias("amount"),
             F.col("event.currency").alias("currency"),
             F.col("event.merchant_id").alias("merchant_id"),
             F.col("event.merchant_category").alias("merchant_category"),
             F.col("event.status").alias("status"),
-            F.to_timestamp("event.timestamp").alias("event_timestamp"),
-            F.col("event.source").alias("source_system"),
+            F.to_timestamp("event.event_timestamp").alias("event_timestamp"),
+            F.col("event.data_source").alias("data_source"),
             "kafka_timestamp",
         )
         # 파생 컬럼
@@ -1548,9 +1579,9 @@ def run_silver_transformation(processing_date: date = None):
 
     # Silver 스키마에 맞게 컬럼 선택
     silver_final = silver_df.select(
-        "tx_id", "user_id", "tx_type", "amount", "currency",
+        "event_id", "user_id", "event_type", "amount", "currency",
         "merchant_id", "merchant_category", "status",
-        "event_timestamp", "tx_date", "tx_hour", "source_system",
+        "event_timestamp", "tx_date", "tx_hour", "data_source",
         "is_anomaly", "quality_flags", "processed_timestamp"
     )
 
@@ -1558,22 +1589,22 @@ def run_silver_transformation(processing_date: date = None):
         silver_final.write
         .format("delta")
         .mode("overwrite")
-        .partitionBy("tx_date", "tx_type")
+        .partitionBy("tx_date", "event_type")
         .option("overwriteSchema", "true")
         .save(silver_path)
     )
 
     output_count = silver_final.count()
     print(f"\n[Step 4] Silver 저장 완료: {output_count:,}건")
-    print(f"  파티셔닝: tx_date / tx_type")
+    print(f"  파티셔닝: tx_date / event_type")
 
     # ── Step 5: 검증 ──
     print(f"\n[검증]")
     silver_read = spark.read.format("delta").load(silver_path)
     print(f"  Silver 전체: {silver_read.count():,}건")
     print(f"\n  파티션별 건수:")
-    silver_read.groupBy("tx_date", "tx_type").count() \
-        .orderBy("tx_date", "tx_type").show(20)
+    silver_read.groupBy("tx_date", "event_type").count() \
+        .orderBy("tx_date", "event_type").show(20)
 
     print(f"\n  이상값(is_anomaly=true): {silver_read.filter(F.col('is_anomaly') == True).count():,}건")
 
@@ -1591,7 +1622,7 @@ if __name__ == "__main__":
 PYEOF
 ```
 
-**Day 3 완료 기준**: 품질 규칙 YAML 정의 완료, QualityChecker 모듈 구현 완료, Silver 변환 Job 작동, 품질 검증 리포트 생성, critical 위반 격리 확인, tx_date/tx_type 파티셔닝 정상 확인.
+**Day 3 완료 기준**: 품질 규칙 YAML 정의 완료, QualityChecker 모듈 구현 완료, Silver 변환 Job 작동, 품질 검증 리포트 생성, critical 위반 격리 확인, tx_date/event_type 파티셔닝 정상 확인.
 
 ---
 
@@ -2324,7 +2355,7 @@ df.write.format("delta").mode("overwrite").save(path)
 |----------|--------|----------|
 | spark.sql.shuffle.partitions | 8 | 데이터 크기에 따라 조정 (소: 8, 중: 50, 대: 200) |
 | spark.sql.adaptive.enabled | true | AQE 활성화 유지 (자동 파티션 조정) |
-| 파티셔닝 전략 | tx_date, tx_type | 데이터 skew 발생 시 salting 적용 |
+| 파티셔닝 전략 | tx_date, event_type | 데이터 skew 발생 시 salting 적용 |
 | Delta OPTIMIZE 주기 | 주 1회 | 쓰기가 많으면 일 1회로 변경 |
 | Delta VACUUM 보관기간 | 7일 (168시간) | 감사 요건에 따라 30일로 확장 가능 |
 
@@ -2344,7 +2375,7 @@ df.write.format("delta").mode("overwrite").save(path)
 |-----------|------|------|----------|
 | Kafka 원본 | nexuspay.events.ingested | JSON | 파티션 6개 |
 | Bronze | /data/lakehouse/delta/bronze/transactions | Delta | ingest_date |
-| Silver | /data/lakehouse/delta/silver/transactions | Delta | tx_date, tx_type |
+| Silver | /data/lakehouse/delta/silver/transactions | Delta | tx_date, event_type |
 | Gold 일별 요약 | /data/lakehouse/delta/gold/daily_summary | Delta | summary_date |
 | Gold 고객 통계 | /data/lakehouse/delta/gold/customer_stats | Delta | stats_month |
 | Gold 수수료 정산 | /data/lakehouse/delta/gold/fee_settlement | Delta | — |
@@ -2486,7 +2517,7 @@ git commit -m "Week 5: Spark 배치 ETL — 메달리온 아키텍처 + Delta La
 | Lazy Evaluation | 액션 호출 전까지 실행하지 않음 | explain()으로 실행 계획 확인 |
 | 메달리온 아키텍처 | Bronze → Silver → Gold 품질 단계 분리 | 3단계 ETL 파이프라인 구현 |
 | Delta Lake | Parquet + 트랜잭션 로그 = ACID 보장 | MERGE, 타임 트래블, 스키마 진화 |
-| 파티셔닝 | 디렉토리 단위 데이터 분할 | ingest_date, tx_date/tx_type 파티셔닝 |
+| 파티셔닝 | 디렉토리 단위 데이터 분할 | ingest_date, tx_date/event_type 파티셔닝 |
 | MERGE (Upsert) | 조건부 INSERT/UPDATE/DELETE | Gold 테이블 멱등성 보장 |
 | 타임 트래블 | 과거 시점 데이터 조회 | versionAsOf, timestampAsOf 조회 |
 | 데이터 품질 | 완전성·유일성·유효성·적시성 검증 | QualityChecker 모듈, YAML 규칙 기반 |

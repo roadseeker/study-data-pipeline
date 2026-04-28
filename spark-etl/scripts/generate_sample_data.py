@@ -1,6 +1,6 @@
 """
 Nexus Pay 샘플 거래 데이터 생성기
-- Kafka 토픽에 적재되는 형식과 동일한 JSON 생성
+- NiFi 표준 스키마와 동일한 JSON 생성
 - Bronze 레이어 테스트용 CSV/JSON 파일 생성
 - 의도적으로 중복, null, 이상값을 섞어서 Silver 품질 검증 테스트 가능하게 만들기
 - data/sample/transactions_sample.jsonl에 JSON Lines 형식으로 저장
@@ -21,18 +21,24 @@ TARGET_DATE = datetime(2026, 3, 31, tzinfo=timezone.utc)
 OUTPUT_DIR = "data/sample"
 
 # 데이터 풀
-TX_TYPES = ["PAYMENT", "REFUND", "TRANSFER"]    # 거래 유형
-TX_TYPE_WEIGHTS = [0.7, 0.15, 0.15]             # 거래 유형 가중치
-STATUSES = ["SUCCESS", "FAILED", "PENDING"]     # 거래 상태
-STATUS_WEIGHTS = [0.92, 0.05, 0.03]             # 거래 상태 가중치
-SOURCES = ["api", "csv", "db"]                  # 유입소스
-SOURCE_WEIGHTS = [0.6, 0.25, 0.15]              # 유입소스 가중치
+EVENT_TYPES = ["PAYMENT", "REFUND", "TRANSFER"]  # 거래 유형
+EVENT_TYPE_WEIGHTS = [0.7, 0.15, 0.15]           # 거래 유형 가중치
+STATUSES = ["COMPLETED", "FAILED", "PENDING"]    # 거래 상태
+STATUS_WEIGHTS = [0.92, 0.05, 0.03]              # 거래 상태 가중치
+DATA_SOURCES = ["payment-api", "settlement-csv", "customer-db"]  # 유입소스
+DATA_SOURCE_WEIGHTS = [0.6, 0.25, 0.15]          # 유입소스 가중치
 CURRENCIES = ["KRW"]                            # 통화
-# 가맹점 카테고리
-MERCHANT_CATEGORIES = ["F&B", "RETAIL", "ONLINE", "TRAVEL", "FINANCE", "HEALTH"]
+CHANNELS = ["APP", "WEB", "POS", "ATM"]
 
-USER_IDS = [f"USR-{i:05d}" for i in range(1, 201)]           # 사용자 아이디-200명
-MERCHANT_IDS = [f"MRC-{i:04d}" for i in range(1, 51)]        # 가맹점 아이디-50개 가맹점
+USER_IDS = list(range(1001, 1201))  # 사용자 아이디-200명
+MERCHANTS = [
+    {"id": "MCH-101", "name": "스타벅스 강남점", "category": "CAFE"},
+    {"id": "MCH-202", "name": "쿠팡 온라인", "category": "ECOMMERCE"},
+    {"id": "MCH-303", "name": "GS25 역삼점", "category": "CONVENIENCE"},
+    {"id": "MCH-404", "name": "현대백화점 판교", "category": "DEPARTMENT"},
+    {"id": "MCH-505", "name": "배달의민족", "category": "DELIVERY"},
+    {"id": "MCH-606", "name": "넷플릭스 코리아", "category": "SUBSCRIPTION"},
+]
 
 
 # 이벤트 1건 생성
@@ -42,16 +48,16 @@ def generate_event(event_time: datetime) -> dict:
     # PAYMENT: 비교적 일반적인 결제 금액
     # REFUND: 결제보다 조금 작은 환불 분포
     # TRANSFER: 더 큰 금액 분포
-    tx_type = random.choices(TX_TYPES, TX_TYPE_WEIGHTS)[0]
-    # SUCCESS / FAILED / PENDING
+    event_type = random.choices(EVENT_TYPES, EVENT_TYPE_WEIGHTS)[0]
+    # COMPLETED / FAILED / PENDING
     status = random.choices(STATUSES, STATUS_WEIGHTS)[0]
 
     # 금액: 거래 유형별 다른 분포
-    if tx_type == "PAYMENT":
+    if event_type == "PAYMENT":
         # PAYMENT: 건수도 많고 금액대도 적당히 다양해서 일반 거래 패턴 표현에 좋음
         amount = round(random.lognormvariate(10, 1.5), 0)     # 중앙값 약 2만원
         amount = max(100, min(amount, 10_000_000))
-    elif tx_type == "REFUND":
+    elif event_type == "REFUND":
         # REFUND: 금액 분포가 상대적으로 좁아 품질 검증/집계 시 해석이 쉬움
         amount = round(random.lognormvariate(9.5, 1.2), 0)
         amount = max(100, min(amount, 5_000_000))
@@ -70,25 +76,51 @@ def generate_event(event_time: datetime) -> dict:
             -abs(amount),                                       # 음수 금액
         ])
 
-    tx_id = str(uuid.uuid4())
+    merchant = random.choice(MERCHANTS)
+    merchant_info = merchant if event_type != "TRANSFER" else None
+    data_source = random.choices(DATA_SOURCES, DATA_SOURCE_WEIGHTS)[0]
+    event_id = str(uuid.uuid4())
+    ingested_at = event_time.isoformat().replace("+00:00", "Z")
 
     event = {
-        "tx_id": tx_id,
+        "event_id": event_id,
+        "event_type": event_type,
         "user_id": random.choice(USER_IDS),
-        "tx_type": tx_type,
-        "amount": round(amount, 0),
+        "amount": float(round(amount, 0)),
         "currency": random.choice(CURRENCIES),
-        "merchant_id": random.choice(MERCHANT_IDS) if tx_type != "TRANSFER" else None,
-        "merchant_category": random.choice(MERCHANT_CATEGORIES) if tx_type != "TRANSFER" else None,
+        "merchant_id": merchant_info["id"] if merchant_info else None,
+        "merchant_name": merchant_info["name"] if merchant_info else None,
+        "merchant_category": merchant_info["category"] if merchant_info else None,
+        "channel": random.choice(CHANNELS),
         "status": status,
-        "timestamp": event_time.isoformat().replace("+00:00", "Z"),
-        "source": random.choices(SOURCES, SOURCE_WEIGHTS)[0],
+        "is_suspicious": is_anomaly,
+        "event_timestamp": event_time.isoformat().replace("+00:00", "Z"),
+        "ingested_at": ingested_at,
+        "data_source": data_source,
+        "schema_version": "1.0",
+        "created_at": event_time.isoformat().replace("+00:00", "Z"),
+        "fee_amount": None,
+        "net_amount": None,
+        "tx_count": None,
+        "batch_id": None,
+        "customer_name": None,
+        "customer_email": None,
+        "customer_phone": None,
+        "customer_grade": None,
+        "is_active": None,
     }
+
+    if data_source == "settlement-csv":
+        event["channel"] = "BATCH"
+        event["batch_id"] = f"BATCH-{TARGET_DATE.strftime('%Y%m%d')}"
+        event["tx_count"] = random.randint(1, 20)
+        event["fee_amount"] = round(event["amount"] * random.uniform(0.005, 0.03), 2)
+        event["net_amount"] = round(event["amount"] - event["fee_amount"], 2)
 
     # null 삽입 (약 1.5%)
     if random.random() < 0.015:
         # 3개의 필드중 하나를 랜덤 선택
-        null_field = random.choice(["user_id", "tx_type", "amount"])
+        null_field = random.choice(["user_id", "event_type", "amount"])
         # 선택된 필드를 None으로 바꿈
         event[null_field] = None
 

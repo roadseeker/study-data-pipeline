@@ -33,13 +33,14 @@ def verify():
     print(f"\n5. 샘플 데이터 (kafka_value 파싱):")
     from pyspark.sql.types import StructType, StructField, StringType, DoubleType
     sample_schema = StructType([
-        StructField("tx_id", StringType()),
-        StructField("tx_type", StringType()),
+        StructField("event_id", StringType()),
+        StructField("event_type", StringType()),
         StructField("amount", DoubleType()),
+        StructField("data_source", StringType()),
     ])
     (
         df.select(F.from_json("kafka_value", sample_schema).alias("parsed"))
-        .select("parsed.tx_id", "parsed.tx_type", "parsed.amount")
+        .select("parsed.event_id", "parsed.event_type", "parsed.amount", "parsed.data_source")
         .show(10, truncate=False)
     )
 
