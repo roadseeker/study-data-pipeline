@@ -15,10 +15,12 @@ import os
 # 설정
 # 기본 정상 거래 1만 건 생성
 # 대상 일자는 2026-03-31
-# 출력은 data/sample
+# 출력은 항상 리포지토리 루트의 data/sample
 NUM_RECORDS = 10000                 # 기본 정산 거래 1만건 생성
 TARGET_DATE = datetime(2026, 3, 31, tzinfo=timezone.utc)
-OUTPUT_DIR = "data/sample"
+OUTPUT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "data", "sample")
+)
 
 # 데이터 풀
 EVENT_TYPES = ["PAYMENT", "REFUND", "TRANSFER"]  # 거래 유형

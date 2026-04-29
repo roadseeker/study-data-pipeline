@@ -29,7 +29,7 @@ partitioning:
   bronze:
     columns: ["ingest_date"]
   silver:
-    columns: ["tx_date", "tx_type"]
+    columns: ["tx_date", "event_type"]
   gold:
     daily_summary: ["summary_date"]
     customer_stats: ["stats_month"]
