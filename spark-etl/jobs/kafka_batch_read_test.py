@@ -1,5 +1,5 @@
 """
-Kafka 배치 읽기 연동 테스트
+Kafka 배치 읽기 연동 테스트 - Spark가 Kafka 토픽을 배치 모드로 읽을 수 있는지 검증한다.
 - Spark Structured Streaming의 배치 모드로 Kafka 토픽 데이터를 읽는다.
 - 이 테스트가 성공하면 Day 2의 Bronze 적재로 넘어간다.
 """
@@ -11,11 +11,14 @@ from lib.spark_session_factory import create_spark_session, load_config
 
 
 def main():
+    # 설정 로드 및 Spark 세션 생성
     config = load_config()
     spark = create_spark_session()
 
+    # Kafka 설정 정보 가져오기
     kafka_conf = config["kafka"]
 
+    # 테스트 시작 메시지 출력
     print("=" * 70)
     print("[Step 1] Kafka 토픽 배치 읽기 시작")
     print(f"  브로커: {kafka_conf['bootstrap_servers']}")
@@ -59,7 +62,7 @@ def main():
         .select(
             col("key").cast("string").alias("key"),
             col("value").cast("string").alias("value"),
-            "topic", "partition", "offset", "timestamp" // Kafka 메시지의 메타데이터도 함께 출력
+            "topic", "partition", "offset", "timestamp" # Kafka 메시지의 메타데이터도 함께 출력
         )
         .orderBy("timestamp")
         .show(5, truncate=80)

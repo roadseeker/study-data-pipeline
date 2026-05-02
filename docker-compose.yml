@@ -15,6 +15,8 @@ volumes:
   kafka-1-data:
   kafka-2-data:
   kafka-3-data:
+  hive-metastore-data:
+  trino-data:
 
 services:
   # ──────────────────────────────────────
@@ -347,6 +349,42 @@ services:
       - ./logs/spark:/opt/spark-events
     networks:
       - pipeline-net
+
+  # ──────────────────────────────────────
+  # Trino — Delta Lake SQL 조회 엔진 (Week 5 확장)
+  # ──────────────────────────────────────
+  hive-metastore:
+    image: apache/hive:4.0.1
+    container_name: lab-hive-metastore
+    environment:
+      SERVICE_NAME: metastore
+    ports:
+      - "9083:9083"
+    volumes:
+      - hive-metastore-data:/opt/hive/data
+      - ./data/lakehouse:/data/lakehouse
+    networks:
+      - pipeline-net
+
+  trino:
+    image: trinodb/trino:480
+    container_name: lab-trino
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./config/trino:/etc/trino:ro
+      - ./data/lakehouse:/data/lakehouse
+      - trino-data:/data/trino
+    depends_on:
+      - hive-metastore
+    networks:
+      - pipeline-net
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/lib/trino/bin/health-check"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # ──────────────────────────────────────
   # Airflow — 오케스트레이션

@@ -10,7 +10,7 @@ This folder contains configuration, schema, and architecture-control assets that
 
 - `kafka/`: Week 2 topic naming, retention, partitioning, replication
 - `nifi/`: Week 3 processor-group design, JOLT specs, schema standardization
-- `flink/`, `spark/`, `airflow/`: environment and future extension placeholders
+- `flink/`, `spark/`, `airflow/`, `trino/`: environment and future extension placeholders
 - `debezium-mysql-connector.json`: Week 6 CDC connector settings
 - `e2e/`: Week 8 scenario orchestration inputs
 

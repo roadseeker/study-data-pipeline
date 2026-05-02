@@ -1093,6 +1093,62 @@ docker exec -w /opt/spark-etl lab-spark-master /opt/spark/bin/spark-submit \
   /opt/spark-etl/scripts/verify_bronze.py
 ```
 
+### 2-5. PySpark 콘솔에서 Spark SQL로 Bronze Delta 확인
+
+자동 검증 스크립트 외에도 PySpark 콘솔에 직접 접속해 Delta Lake 테이블을 SQL로 확인할 수 있다. 이 방식은 장애 대응이나 데이터 검산 상황에서 현재 Delta 경로의 실제 적재 건수와 파티션 분포를 빠르게 확인하는 데 유용하다.
+
+Git Bash에서는 Docker 대화형 터미널을 안정적으로 열기 위해 `winpty`를 사용한다. 또한 Git Bash가 `/opt/...` 같은 컨테이너 내부 Linux 경로를 Windows 경로로 변환하지 않도록, 컨테이너 안의 `bash -lc`에서 PySpark를 실행한다.
+
+```bash
+winpty docker exec -it lab-spark-master bash -lc \
+  'exec /opt/spark/bin/pyspark \
+    --packages io.delta:delta-spark_2.12:3.1.0 \
+    --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+    --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog'
+```
+
+Delta Lake를 PySpark 콘솔에서 직접 읽을 때는 `--packages`만으로는 충분하지 않다. Delta Lake 연산에는 SparkSession 생성 시점에 다음 두 설정이 함께 필요하다.
+
+- `spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension`
+- `spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog`
+
+PySpark 콘솔이 열리면 Bronze Delta 경로를 DataFrame으로 읽고 임시 뷰로 등록한다.
+
+```python
+bronze_path = "/data/lakehouse/delta/bronze/transactions"
+
+df = spark.read.format("delta").load(bronze_path)
+df.createOrReplaceTempView("bronze_transactions")
+```
+
+전체 적재 건수는 Spark SQL로 다음과 같이 확인한다.
+
+```python
+spark.sql("""
+SELECT COUNT(*) AS bronze_count
+FROM bronze_transactions
+""").show()
+```
+
+`ingest_date` 파티션별 건수는 다음 SQL로 확인한다.
+
+```python
+spark.sql("""
+SELECT
+  ingest_date,
+  COUNT(*) AS row_count
+FROM bronze_transactions
+GROUP BY ingest_date
+ORDER BY ingest_date
+""").show()
+```
+
+확인이 끝나면 PySpark 콘솔을 종료한다.
+
+```python
+exit()
+```
+
 **Day 2 완료 기준**: Bronze 적재 Job(Kafka 및 파일 기반) 구현 완료, Delta Lake 테이블 생성 확인, 멱등성(MERGE) 로직 검증, 파티셔닝(ingest_date) 정상 확인, 검증 스크립트 통과.
 
 ---
@@ -2119,6 +2175,163 @@ SHEOF
 
 chmod +x spark-etl/scripts/delta_maintenance.sh
 ```
+
+### 4-5. Trino와 DBeaver로 Delta Lake SQL 조회
+
+Week 5의 Delta Lake 테이블은 Spark/PySpark로 생성하지만, 운영 검증이나 분석가용 조회에서는 SQL 클라이언트가 필요할 수 있다. 이를 위해 `docker-compose.yml`에 Trino와 Hive Metastore를 Week 5 확장 서비스로 추가한다. Trino는 데이터를 저장하는 DB가 아니라 DBeaver가 접속하는 SQL 쿼리 엔진이다.
+
+```text
+DBeaver
+  -> Trino (localhost:8085)
+  -> file-based metastore (/data/lakehouse/metastore/)
+  -> Delta Lake files (/data/lakehouse/delta/...)
+```
+
+#### delta.properties 설정
+
+Trino 설정 파일은 다음 위치에 둔다.
+
+```text
+config/trino/
+├── config.properties
+├── jvm.config
+├── log.properties
+├── node.properties
+└── catalog/
+    └── delta.properties
+```
+
+`config/trino/catalog/delta.properties` 내용은 다음과 같다.
+
+```properties
+connector.name=delta_lake
+
+hive.metastore=file
+hive.metastore.catalog.dir=local:///metastore
+
+fs.native-local.enabled=true
+local.location=/data/lakehouse
+
+delta.register-table-procedure.enabled=true
+```
+
+**설정 설명**
+
+Trino 480부터 native local filesystem(`fs.native-local.enabled=true`)이 기존 Hadoop `file://` 핸들러를 대체한다. 이 환경에서 파일 접근은 반드시 `local://` 스킴을 사용해야 한다. `local.location=/data/lakehouse`를 기준으로 `local:///delta/...`는 컨테이너 내부 경로 `/data/lakehouse/delta/...`로 해석된다.
+
+Hive Thrift Metastore(`hive.metastore=thrift`)는 `local://` 스킴을 인식하지 못해 테이블 등록 시 `No FileSystem for scheme "local"` 오류가 발생한다. 이를 피하기 위해 `hive.metastore=file`로 설정하면 Trino가 메타데이터를 직접 파일로 관리하며 `local://` 경로를 정상 처리한다.
+
+메타스토어 파일은 `local:///metastore` → `/data/lakehouse/metastore/`에 저장된다. 이 경로는 `./data/lakehouse` 볼륨에 바인드 마운트되어 있으므로 `docker restart` 후에도 테이블 등록이 유지된다.
+
+#### 기동 및 상태 확인
+
+Trino와 Hive Metastore를 기동한다.
+
+```bash
+docker compose up -d hive-metastore trino
+```
+
+Trino 상태를 확인한다.
+
+```bash
+curl -sf http://localhost:8085/v1/info
+```
+
+Trino CLI로 접속한다.
+
+```bash
+docker exec -it lab-trino trino
+# Git Bash(mintty) 환경에서는 winpty 사용
+winpty docker exec -it lab-trino trino
+```
+
+Delta catalog와 스키마를 확인한다.
+
+```sql
+SHOW CATALOGS;
+SHOW SCHEMAS FROM delta;
+```
+
+#### 스키마 및 테이블 등록
+
+처음에는 Spark가 생성한 Delta 테이블을 Trino에 등록해야 한다. 스키마를 먼저 만들고 각 레이어 테이블을 등록한다.
+
+`local.location=/data/lakehouse`가 기준이므로 경로는 그 이하 상대 경로로 지정한다.
+
+```sql
+CREATE SCHEMA IF NOT EXISTS delta.nexuspay
+WITH (location = 'local:///delta');
+
+-- Bronze
+CALL delta.system.register_table(
+  schema_name => 'nexuspay',
+  table_name => 'bronze_transactions',
+  table_location => 'local:///delta/bronze/transactions'
+);
+
+-- Silver (Silver ETL 완료 후 등록)
+CALL delta.system.register_table(
+  schema_name => 'nexuspay',
+  table_name => 'silver_transactions',
+  table_location => 'local:///delta/silver/transactions'
+);
+
+-- Gold (Gold ETL 완료 후 등록)
+CALL delta.system.register_table(
+  schema_name => 'nexuspay',
+  table_name => 'gold_daily_summary',
+  table_location => 'local:///delta/gold/daily_summary'
+);
+```
+
+등록 후 테이블 목록과 건수를 확인한다.
+
+```sql
+SHOW TABLES FROM delta.nexuspay;
+
+SELECT COUNT(*) AS bronze_count
+FROM delta.nexuspay.bronze_transactions;
+
+SELECT ingest_date, COUNT(*) AS row_count
+FROM delta.nexuspay.bronze_transactions
+GROUP BY ingest_date
+ORDER BY ingest_date;
+```
+
+#### 메타스토어 영속성
+
+테이블 등록 정보는 `/data/lakehouse/metastore/` 하위에 파일로 저장된다. 이 경로는 호스트의 `./data/lakehouse/`에 바인드 마운트되어 있어 Trino 재기동 후에도 재등록 없이 그대로 사용할 수 있다. 단, `docker compose down -v`로 볼륨을 삭제하면 메타데이터도 함께 삭제된다.
+
+등록 파일 위치를 확인하는 방법은 다음과 같다.
+
+```bash
+docker exec lab-trino bash -c "ls /data/lakehouse/metastore/nexuspay/"
+```
+
+#### DBeaver 연결 설정
+
+DBeaver에서는 새 연결을 만들 때 다음 값을 사용한다.
+
+| 항목 | 값 |
+|------|----|
+| Driver | Trino |
+| Host | localhost |
+| Port | 8085 |
+| User | nexuspay |
+| Catalog | delta |
+| Schema | nexuspay |
+
+검증 SQL:
+
+```sql
+SELECT *
+FROM delta.nexuspay.bronze_transactions
+LIMIT 10;
+```
+
+DBeaver 에디터에서 테이블 미인식 경고(빨간 밑줄)가 표시되더라도 쿼리 실행 결과가 정상이면 기능상 문제없다. Database Navigator에서 해당 스키마를 우클릭 → Refresh하면 자동완성에도 테이블이 나타난다.
+
+Trino는 Delta Lake 파일을 직접 저장하지 않는다. Spark가 만든 Delta 테이블을 SQL 클라이언트에서 조회할 수 있게 해주는 서버이므로, ETL 생성 책임은 Spark에 두고 조회/분석 책임을 Trino에 둔다.
 
 **Day 4 완료 기준**: Gold 3종 집계 테이블(daily_summary, customer_stats, fee_settlement) 생성 완료, MERGE(Upsert) 멱등성 검증, 타임 트래블 데모 실행 성공, VACUUM/OPTIMIZE 유지보수 스크립트 작동 확인.
 

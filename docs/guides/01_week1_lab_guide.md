@@ -848,6 +848,9 @@ curl -sf http://localhost:8083/health
 | Flink Dashboard | http://localhost:8081 | (인증 없음) |
 | Spark Master | http://localhost:8082 | (인증 없음) |
 | Airflow | http://localhost:8083 | admin / airflow |
+| Trino | http://localhost:8085 | (Week 5 Delta Lake SQL 조회 확장용) |
+
+> 참고: `docker-compose.yml`은 주차가 진행되며 누적 확장된다. Trino와 Hive Metastore는 Week 5 Delta Lake SQL 조회와 DBeaver 연결을 위해 추가되는 확장 서비스이며, Week 1 완료 기준에는 포함하지 않는다.
 
 **Day 3 완료 기준**: Flink 대시보드에서 TaskManager 1개·슬롯 4개 확인, Spark Master에 Worker 1개 등록 확인, Airflow 웹 UI 로그인 성공.
 
@@ -1150,7 +1153,7 @@ Week 2 준비 포인트:
 
 | # | 산출물 | 완료 |
 |---|--------|------|
-| 1 | docker-compose.yml (7개 서비스 정의) | ☑ |
+| 1 | docker-compose.yml (기초 7개 서비스 정의, 이후 주차 확장 가능) | ☑ |
 | 2 | .env 환경 변수 파일 | ☑ |
 | 3 | scripts/foundation/init-db.sql (PostgreSQL 초기화) | ☑ |
 | 4 | scripts/foundation/healthcheck-all.sh (통합 헬스체크) | ☑ |
@@ -1170,6 +1173,8 @@ Week 2 준비 포인트:
 | 8081 | Flink Dashboard |
 | 8082 | Spark Master UI |
 | 8083 | Airflow |
+| 8085 | Trino (Week 5 확장) |
+| 9083 | Hive Metastore (Week 5 확장, 내부 메타스토어) |
 
 ## Week 2 예고
 

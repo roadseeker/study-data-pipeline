@@ -75,7 +75,7 @@ def generate_event(event_time: datetime) -> dict:
         amount = random.choice([
             random.uniform(50_000_000, 100_000_000),     # 고액 이상거래
             random.uniform(1, 50),                       # 극소액 이상거래
-            -abs(amount),                                       # 음수 금액
+            -abs(amount),                                # 음수 금액
         ])
 
     merchant = random.choice(MERCHANTS)

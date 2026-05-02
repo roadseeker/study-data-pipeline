@@ -81,6 +81,14 @@ Use this framing consistently in:
 - Preserve the Apache open-source positioning. Do not casually replace the stack with commercial alternatives.
 - Use Redis 7 assumptions unless the user explicitly requests another version.
 
+## Command Style
+
+- The user primarily uses Git Bash.
+- Provide shell commands in Bash syntax by default, including line continuations with `\`.
+- Use PowerShell syntax only when the user explicitly asks for it or when a Windows-specific operation requires it.
+- For Docker container commands, prefer Linux/container paths such as `/opt/spark-etl` and `/data/lakehouse`.
+- When referencing local workspace files, clarify Windows host paths separately when helpful.
+
 ## Documentation Standards
 
 - Write documentation in a professional consulting style.
